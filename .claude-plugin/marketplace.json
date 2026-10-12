@@ -1,0 +1,17 @@
+{
+  "name": "wcampbell",
+  "description": "wcampbell's personal Claude Code plugins",
+  "owner": { "name": "wcampbell" },
+  "plugins": [
+    {
+      "name": "wc-statusline",
+      "source": "./plugins/wc-statusline",
+      "description": "Three-line Nerd Font status line: cwd and git, model and context, account and usage"
+    },
+    {
+      "name": "swap",
+      "source": "./plugins/swap",
+      "description": "/swap: switch Claude accounts with cswap"
+    }
+  ]
+}
