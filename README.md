@@ -1,63 +1,86 @@
 # claude-plugins
 
-wcampbell's personal Claude Code plugin marketplace.
+A small collection of [Claude Code](https://claude.com/claude-code) plugins:
 
-## Setup
+| Plugin | What it does |
+| --- | --- |
+| [agent-spinners](#agent-spinners) | Live list of running subagents above the prompt, with braille spinners and toasts when they finish |
+| [statusline](#statusline) | Three-line status line: directory and git, model and context, account and usage limits |
+| [swap](#swap) | `/swap` slash command to switch Claude accounts with `cswap` |
 
-Add the marketplace once per machine, at a Claude Code prompt:
+## Getting started
+
+Add this marketplace once, at a Claude Code prompt:
 
 ```
 /plugin marketplace add wcampbell-dw/claude-plugins
 ```
 
-Then install the plugins you want, by name or by browsing `/plugin`.
+Then install the plugins you want with the commands below, or browse them with `/plugin`. To pick up new versions later, run `/plugin update <name>`.
 
 ## Plugins
 
-### statusline
-
-A three-line status line drawn with Nerd Font icons and your terminal's own colors.
-
-```
-  ~/projects/manitou                                          main 
-󰚩 Opus 5.5  󰓅 medium │ 󰍛 ━━──────── 18% 182k/1M
- wcampbell │  5h ━━━━────── 35% 󰑓 3:10pm 3h07m │  7d 2% 󰑓 Sun 6pm 6d5h
-```
-
-```
-/plugin install statusline --marketplace wcampbell-dw/claude-plugins
-```
-
-Then run `/statusline-install` once per machine. It points the `statusLine` setting in `~/.claude/settings.json` at `~/.claude/statusline.sh` and keeps your other settings. Each session start copies the plugin's current script to that path, so plugin updates reach the status line without running the command again.
-
-Needs a [Nerd Font](https://www.nerdfonts.com/) in your terminal, and `bash`, `jq` and `git` on PATH (Git Bash on Windows).
-
-### swap
-
-`/swap [num|email|alias]` runs `cswap switch` to change Claude accounts. With no argument it rotates to the next account. Needs `cswap` on PATH.
-
-```
-/plugin install swap --marketplace wcampbell-dw/claude-plugins
-```
-
 ### agent-spinners
 
-A band above the prompt with one row per subagent: a braille spinner while it runs, its type, then its description.
+A band above the prompt with one row per subagent: a spinner showing its state, its agent type, then what it's working on.
 
 ```
 ⠹ general-purpose  Fix the flaky login test
-⠼ mattpoc…research Look up the retry API
+⠼ acme-to…reviewer Review the retry logic
 ✓ Explore          Survey plugin manifests
 ```
 
-- Running agents spin in cyan; queued or blocked ones spin slower in yellow. An idle teammate holds its last frame in gray.
-- The description dims after 5 seconds without a status change or tool call, and brightens on the next one.
-- Finished agents show ✓ (or ✗ when they failed or were stopped) for 8 seconds, then drop off. The band disappears when no agents are left.
-- A toast says when an agent finishes, fails or is stopped, and stays longer when one is waiting on you (a permission prompt).
-- Types are fixed at 16 columns. A long `plugin:agent` name gives up its plugin name first (`mattpoc…research`, then `research`), and only then is the agent name cut.
+- **Spinners:** running agents spin in cyan, and queued or blocked ones spin slower in yellow. An idle teammate freezes on its last frame in gray.
+- **Activity:** an agent's description dims after 5 seconds without a status change or tool call, and brightens again on the next one.
+- **Finishing:** finished agents show ✓ (or ✗ when they failed or were stopped) for 8 seconds, then drop off. The band disappears when no agents are left.
+- **Toasts:** a toast tells you when an agent finishes, fails or is stopped, and stays up longer when one is waiting on you, for example at a permission prompt.
+- **Long names:** agent types get a fixed 16 columns so rows line up. A long `plugin:agent` name gives up its plugin name first (`acme-to…reviewer`, then `reviewer`), and only then is the agent name cut.
 
 ```
 /plugin install agent-spinners --marketplace wcampbell-dw/claude-plugins
 ```
 
-The spinners animate in the terminal and the desktop app; other surfaces show a static `●`. Claude Code's own subagent list still shows below it.
+The spinners animate in the terminal and the desktop app; other surfaces show a static `●`. Claude Code's own subagent list still shows below the band.
+
+### statusline
+
+A three-line status line drawn with Nerd Font icons in your terminal's own colors.
+
+```
+  ~/projects/my-app                                           main 
+󰚩 Opus 5.5  󰓅 medium │ 󰍛 ━━──────── 18% 182k/1M
+ you │  5h ━━━━────── 35% 󰑓 3:10pm 3h07m │  7d 2% 󰑓 Sun 6pm 6d5h
+```
+
+1. Directory and git branch with its status. Both are links: Ctrl+click opens the folder or the repository on GitHub.
+2. Model, effort level, and how full the context window is.
+3. Signed-in account, then your 5-hour and 7-day usage limits with when each resets.
+
+```
+/plugin install statusline --marketplace wcampbell-dw/claude-plugins
+```
+
+Then run `/statusline-install` once on each machine. It sets the `statusLine` setting in `~/.claude/settings.json` to run `~/.claude/statusline.sh`, keeping your other settings. The plugin copies its current script to that path at every session start, so updates reach your status line without running the command again.
+
+> [!WARNING]
+> The plugin overwrites `~/.claude/statusline.sh` at every session start. If you already keep your own status line script at that path, move it first.
+
+**Needs:** a [Nerd Font](https://www.nerdfonts.com/) in your terminal, and `bash`, `jq` and `git` on your PATH (on Windows, Git Bash provides `bash`). It's built and tested on Windows under Git Bash. It sticks to plain bash, `jq` and `git`, so macOS and Linux should work, but they haven't been tested.
+
+### swap
+
+`/swap [num|email|alias]` runs `cswap switch` to change which Claude account you're signed in with. With no argument, it rotates to the next account.
+
+```
+/plugin install swap --marketplace wcampbell-dw/claude-plugins
+```
+
+**Needs:** the `cswap` account switcher on your PATH, with your accounts already added to it.
+
+## Requirements
+
+agent-spinners and statusline are built on Claude Code's plugin hooks API, which is in early access, so they need a recent Claude Code. They were developed against version 2.1.296. swap is a plain slash command and works on any version with plugin support.
+
+## Issues
+
+Found a bug or have an idea? [Open an issue](https://github.com/wcampbell-dw/claude-plugins/issues).

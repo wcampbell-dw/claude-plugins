@@ -1,6 +1,6 @@
 {
   "name": "wcampbell",
-  "description": "wcampbell's personal Claude Code plugins",
+  "description": "Claude Code plugins: live subagent spinners, a Nerd Font status line, and account switching",
   "owner": { "name": "wcampbell" },
   "plugins": [
     {
