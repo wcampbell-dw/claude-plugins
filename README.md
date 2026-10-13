@@ -62,8 +62,10 @@ A three-line status line drawn with Nerd Font icons in your terminal's own color
 
 Then run `/statusline-install` once on each machine. It sets the `statusLine` setting in `~/.claude/settings.json` to run `~/.claude/statusline.sh`, keeping your other settings. The plugin copies its current script to that path at every session start, so updates reach your status line without running the command again.
 
-> [!WARNING]
-> The plugin overwrites `~/.claude/statusline.sh` at every session start. If you already keep your own status line script at that path, move it first.
+To undo it, run `/statusline-uninstall`. It puts back the `statusLine` setting and the `~/.claude/statusline.sh` you had before the plugin replaced them, and stops copying the script until you run `/statusline-install` again. If you had no script at that path, the copy stays there for you to delete.
+
+> [!NOTE]
+> The plugin overwrites `~/.claude/statusline.sh` at every session start. It keeps the first file it replaces, which `/statusline-uninstall` restores. A file replaced before this version of the plugin is not kept.
 
 **Needs:** a [Nerd Font](https://www.nerdfonts.com/) in your terminal, and `bash`, `jq` and `git` on your PATH (on Windows, Git Bash provides `bash`). It's built and tested on Windows under Git Bash. It sticks to plain bash, `jq` and `git`, so macOS and Linux should work, but they haven't been tested.
 
