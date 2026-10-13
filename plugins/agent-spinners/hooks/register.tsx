@@ -12,20 +12,44 @@ const LINGER_MS = 8000
 // starting or ending) before its row dims.
 const QUIET_MS = 5000
 const POLL_MS = 500
+// How long a toast stays: longer when an agent is waiting on you.
+const TOAST_MS = 6000
+const ATTENTION_TOAST_MS = 12000
 
 let timer: Timer | undefined
 let last = '[]'
 const lastStatus = new Map<string, string>()
 const changedAt = new Map<string, number>()
 
+// What a toast says when an agent moves into a status, by status; a status
+// not listed here raises no toast.
+const NOTICES: Record<string, string> = {
+  completed: '✓ {type} finished: {label}',
+  failed: '✗ {type} failed: {label}',
+  killed: '✗ {type} was stopped: {label}',
+  waiting: '⏳ {type} needs attention: {label}',
+}
+
 async function refresh($: Engine) {
   const now = await $.clock.now()
   const rows: AgentRow[] = []
 
   for (const agent of await $.agent.list()) {
-    if (lastStatus.get(agent.id) !== agent.status) {
+    const previous = lastStatus.get(agent.id)
+    if (previous !== agent.status) {
       lastStatus.set(agent.id, agent.status)
       changedAt.set(agent.id, now)
+
+      // An agent first seen already in a status (after a reload) says nothing.
+      const notice = NOTICES[agent.status]
+      if (previous !== undefined && notice) {
+        $.ui.toast(
+          notice
+            .replace('{type}', agent.type)
+            .replace('{label}', agent.description || agent.name || agent.type),
+          { timeoutMs: agent.status === 'waiting' ? ATTENTION_TOAST_MS : TOAST_MS },
+        )
+      }
     }
 
     const sinceChange = now - (changedAt.get(agent.id) ?? now)

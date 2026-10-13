@@ -168,3 +168,55 @@ test('an idle agent holds its last frame in gray', async ($, on) => {
   expect((await mark())?.text).not.toBe('⠸ ')
   await ui.unmount()
 })
+
+test('a toast says when agents finish or need attention', async ($, on) => {
+  const clock = mock.clock(on)
+  const toasts: { text: string; timeoutMs?: number }[] = []
+  let agents: AgentInfo[] = [
+    { id: 'a1', description: 'Scope the repo', type: 'scoper', status: 'running' },
+    { id: 'a2', description: 'Fix the test', type: 'implementer', status: 'running' },
+    { id: 'a3', description: 'Ship it', type: 'shipper', status: 'running' },
+  ]
+
+  on('agent.list', () => ({ value: agents }))
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('ui.toast', ($, e) => {
+    toasts.push(e)
+
+    return { value: undefined }
+  })
+
+  await $.agent.spawn({
+    tool_use_id: 't1',
+    prompt: 'go',
+    description: 'Scope the repo',
+    subagentType: 'scoper',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: true,
+    fork: false,
+  })
+  await clock.advance(0)
+  expect(toasts).toHaveLength(0)
+
+  // One waits on a permission prompt: a long toast.
+  agents = [agents[0]!, { ...agents[1]!, status: 'waiting' }, agents[2]!]
+  await clock.advance(500)
+  expect(toasts).toEqual([{ text: '⏳ implementer needs attention: Fix the test', timeoutMs: 12000 }])
+
+  // Two end in the same check: a toast each.
+  agents = [{ ...agents[0]!, status: 'completed' }, agents[1]!, { ...agents[2]!, status: 'killed' }]
+  await clock.advance(500)
+  expect(toasts.slice(1)).toEqual([
+    { text: '✓ scoper finished: Scope the repo', timeoutMs: 6000 },
+    { text: '✗ shipper was stopped: Ship it', timeoutMs: 6000 },
+  ])
+
+  // Back to running says nothing; failing does.
+  agents = [agents[0]!, { ...agents[1]!, status: 'running' }, agents[2]!]
+  await clock.advance(500)
+  expect(toasts).toHaveLength(3)
+  agents = [agents[0]!, { ...agents[1]!, status: 'failed' }, agents[2]!]
+  await clock.advance(500)
+  expect(toasts[3]?.text).toBe('✗ implementer failed: Fix the test')
+})

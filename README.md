@@ -53,6 +53,7 @@ A band above the prompt with one row per subagent: a braille spinner while it ru
 - Running agents spin in cyan; queued or blocked ones spin slower in yellow. An idle teammate holds its last frame in gray.
 - The description dims after 5 seconds without a status change or tool call, and brightens on the next one.
 - Finished agents show ✓ (or ✗ when they failed or were stopped) for 8 seconds, then drop off. The band disappears when no agents are left.
+- A toast says when an agent finishes, fails or is stopped, and stays longer when one is waiting on you (a permission prompt).
 - Types are fixed at 16 columns. A long `plugin:agent` name gives up its plugin name first (`mattpoc…research`, then `research`), and only then is the agent name cut.
 
 ```
