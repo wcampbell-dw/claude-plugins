@@ -28,7 +28,7 @@ A three-line status line drawn with Nerd Font icons and your terminal's own colo
 /plugin install statusline --marketplace wcampbell-dw/claude-plugins
 ```
 
-Then run `/statusline-install` once per machine. It points the `statusLine` setting in `~/.claude/settings.json` at `~/.claude/wc-statusline.sh` and keeps your other settings. Each session start copies the plugin's current script to that path, so plugin updates reach the status line without running the command again.
+Then run `/statusline-install` once per machine. It points the `statusLine` setting in `~/.claude/settings.json` at `~/.claude/statusline.sh` and keeps your other settings. Each session start copies the plugin's current script to that path, so plugin updates reach the status line without running the command again.
 
 Needs a [Nerd Font](https://www.nerdfonts.com/) in your terminal, and `bash`, `jq` and `git` on PATH (Git Bash on Windows).
 

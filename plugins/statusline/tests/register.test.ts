@@ -3,7 +3,7 @@ import type { On } from 'claude-code'
 
 const HOME = 'C:/Users/me'
 const SETTINGS = `${HOME}/.claude/settings.json`
-const COPY = `${HOME}/.claude/wc-statusline.sh`
+const COPY = `${HOME}/.claude/statusline.sh`
 
 // An in-memory file system beneath the plugin; the plugin's own script reads as 'echo status'.
 const fakeFs = (on: On, files: Map<string, string>) => {
@@ -34,7 +34,7 @@ test('install keeps other settings and points statusLine at the copied script', 
 
   expect(JSON.parse(files.get(SETTINGS) ?? '{}')).toEqual({
     theme: 'dark',
-    statusLine: { type: 'command', command: 'bash ~/.claude/wc-statusline.sh', refreshInterval: 30 },
+    statusLine: { type: 'command', command: 'bash ~/.claude/statusline.sh', refreshInterval: 30 },
   })
   expect(files.get(COPY)).toBe('echo status\n')
   expect(text).toContain('was `old`')
@@ -51,6 +51,6 @@ test('install creates settings.json when there is none', async ($, on) => {
   await $.command.run({ command: 'statusline-install' })
 
   expect(JSON.parse(files.get(SETTINGS) ?? '{}')).toEqual({
-    statusLine: { type: 'command', command: 'bash ~/.claude/wc-statusline.sh', refreshInterval: 60 },
+    statusLine: { type: 'command', command: 'bash ~/.claude/statusline.sh', refreshInterval: 60 },
   })
 })

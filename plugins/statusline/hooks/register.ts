@@ -3,8 +3,8 @@ import type { EngineInterface as Engine, Register } from 'claude-code'
 // A plugin cannot set the statusLine setting itself, and its installed folder changes with
 // each version. So each session copies the script to one fixed path, and
 // /statusline-install points the statusLine setting at that path, once per machine.
-const SCRIPT = '.claude/wc-statusline.sh'
-const COMMAND = 'bash ~/.claude/wc-statusline.sh'
+const SCRIPT = '.claude/statusline.sh'
+const COMMAND = 'bash ~/.claude/statusline.sh'
 
 const homeDir = async ($: Engine): Promise<string> => {
   const home = (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE'))
@@ -12,7 +12,7 @@ const homeDir = async ($: Engine): Promise<string> => {
   return home.replace(/\\/g, '/').replace(/\/$/, '')
 }
 
-// Copies the plugin's script to ~/.claude/wc-statusline.sh when it differs.
+// Copies the plugin's script to ~/.claude/statusline.sh when it differs.
 const syncScript = async ($: Engine): Promise<boolean> => {
   const source = await $.fs.read(`${$.plugin.root}/scripts/statusline.sh`)
   const target = `${await homeDir($)}/${SCRIPT}`
