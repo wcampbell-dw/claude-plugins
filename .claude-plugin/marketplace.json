@@ -4,8 +4,8 @@
   "owner": { "name": "wcampbell" },
   "plugins": [
     {
-      "name": "wc-statusline",
-      "source": "./plugins/wc-statusline",
+      "name": "statusline",
+      "source": "./plugins/statusline",
       "description": "Three-line Nerd Font status line: cwd and git, model and context, account and usage"
     },
     {

@@ -26,7 +26,7 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'statusline-install',
-      description: 'Point the statusLine setting at the wc-statusline script',
+      description: 'Point the statusLine setting at the statusline script',
     })
     await syncScript($).catch(err => $.ui.log(`could not copy the status line script: ${err}`))
 
@@ -50,7 +50,7 @@ export const register: Register = on => {
     return {
       text:
         previous === COMMAND
-          ? 'statusLine already points at the wc-statusline script.'
+          ? 'statusLine already points at the statusline script.'
           : `statusLine now runs \`${COMMAND}\`${previous ? ` (was \`${previous}\`)` : ''}.`,
     }
   })
