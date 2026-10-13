@@ -75,7 +75,7 @@ Then run `/statusline-install` once on each machine. It sets the `statusLine` se
 /plugin install swap --marketplace wcampbell-dw/claude-plugins
 ```
 
-**Needs:** the `cswap` account switcher on your PATH, with your accounts already added to it.
+**Needs:** [claude-swap](https://github.com/realiti4/claude-swap) (`uv tool install claude-swap` or `pipx install claude-swap`), with your accounts added via `cswap add`.
 
 ## Requirements
 
