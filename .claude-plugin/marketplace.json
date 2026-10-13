@@ -12,6 +12,11 @@
       "name": "swap",
       "source": "./plugins/swap",
       "description": "/swap: switch Claude accounts with cswap"
+    },
+    {
+      "name": "agent-spinners",
+      "source": "./plugins/agent-spinners",
+      "description": "Band above the prompt listing subagents with braille spinners while they run"
     }
   ]
 }

@@ -1,0 +1,170 @@
+import type { AgentInfo } from 'claude-code'
+import { expect, mock, test } from 'claude-code/testing'
+
+const BAND = {
+  plugin: 'agent-spinners',
+  component: 'AbovePrompt',
+  props: {
+    hasSurvey: false,
+    isWorking: true,
+    maxRows: 20,
+    bodyColumns: 80,
+    scroll: { offset: 0, bodyRows: 20 },
+    view: {},
+  },
+} as const
+
+test('running agents spin, then tick and drop off', async ($, on) => {
+  const clock = mock.clock(on)
+  let agents: AgentInfo[] = []
+
+  on('agent.list', () => ({ value: agents }))
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box key="engine" />
+  })
+
+  agents = [{ id: 'a1', description: 'Scope the repo', type: 'scoper', status: 'running' }]
+  await $.agent.spawn({
+    tool_use_id: 't1',
+    prompt: 'go',
+    description: 'Scope the repo',
+    subagentType: 'scoper',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: true,
+    fork: false,
+  })
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  expect((await ui.find({ in: 'agent-spinners', text: /Scope the repo/ }))).toBeDefined()
+  expect((await ui.find({ in: 'agent-spinners', text: '⠋ ' }))).toBeDefined()
+
+  // The type leads, padded to a fixed column; a long one is cut with an ellipsis.
+  expect(await ui.find({ in: 'agent-spinners', type: 'Text', text: 'scoper           ' })).toBeDefined()
+
+  await ui.advance(80)
+  expect((await ui.find({ in: 'agent-spinners', text: '⠙ ' }))).toBeDefined()
+
+  const label = async () => (await ui.find({ in: 'agent-spinners', type: 'Text', text: /Scope the repo/ }))?.props.dimColor
+  expect(await label()).toBeFalsy()
+
+  // Nothing changes for 5s: the row dims, not before.
+  await clock.advance(4500)
+  expect(await label()).toBeFalsy()
+  await clock.advance(1000)
+  expect(await label()).toBe(true)
+
+  // A change brightens it again.
+  agents = [{ ...agents[0]!, status: 'waiting' }]
+  await clock.advance(500)
+  expect(await label()).toBeFalsy()
+
+  agents = [{ ...agents[0]!, status: 'completed' }]
+  await clock.advance(500)
+  expect((await ui.find({ in: 'agent-spinners', text: '✓ ' }))).toBeDefined()
+
+  // A finished row outlasts the quiet time: still up at 6s.
+  await clock.advance(6000)
+  expect((await ui.find({ in: 'agent-spinners', text: '✓ ' }))).toBeDefined()
+
+  await clock.advance(3000)
+  expect(await ui.find({ key: 'engine' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('long names give up the plugin name before the agent name', async ($, on) => {
+  const clock = mock.clock(on)
+  const names: [string, string][] = [
+    ['general-purpose', 'general-purpose '],
+    ['mattpocock-skills:research', 'mattpoc…research'],
+    ['pluginname:research-x', 'plugi…research-x'],
+    ['plugin:researcher-x1', 'researcher-x1   '],
+    ['pluginname:researcher-x12', 'researcher-x12  '],
+    ['lab:an-extremely-long-agent', 'an-extremely-lo…'],
+    ['an-extremely-long-builtin', 'an-extremely-lo…'],
+  ]
+  const agents: AgentInfo[] = names.map(([type], i) => ({
+    id: `a${i}`,
+    description: `agent ${i}`,
+    type,
+    status: 'running',
+  }))
+
+  on('agent.list', () => ({ value: agents }))
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a0' }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box key="engine" />
+  })
+
+  await $.agent.spawn({
+    tool_use_id: 't1',
+    prompt: 'go',
+    description: 'agent 0',
+    subagentType: 'general-purpose',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: true,
+    fork: false,
+  })
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const drawn = (await ui.findAll({ in: 'agent-spinners', type: 'Text' })).map(t => t.text)
+
+  for (const [, shown] of names) {
+    expect(drawn).toContain(`${shown} `)
+  }
+  await ui.unmount()
+})
+
+test('an idle agent holds its last frame in gray', async ($, on) => {
+  const clock = mock.clock(on)
+  let agents: AgentInfo[] = [{ id: 'a1', description: 'Teammate', type: 'teammate', status: 'running' }]
+
+  on('agent.list', () => ({ value: agents }))
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box key="engine" />
+  })
+
+  await $.agent.spawn({
+    tool_use_id: 't1',
+    prompt: 'go',
+    description: 'Teammate',
+    subagentType: 'teammate',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: true,
+    fork: false,
+  })
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const mark = async () => (await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]
+
+  // Spin to the fourth frame, then go idle.
+  await ui.advance(240)
+  expect((await mark())?.text).toBe('⠸ ')
+
+  agents = [{ ...agents[0]!, status: 'idle' }]
+  await clock.advance(500)
+  await ui.advance(400)
+  expect((await mark())?.text).toBe('⠸ ')
+  expect((await mark())?.props.color).toBe('gray')
+
+  // Back to running, it spins on from the live frame in cyan.
+  agents = [{ ...agents[0]!, status: 'running' }]
+  await clock.advance(500)
+  await ui.advance(80)
+  expect((await mark())?.props.color).toBe('cyan')
+  expect((await mark())?.text).not.toBe('⠸ ')
+  await ui.unmount()
+})

@@ -1,0 +1,7 @@
+{
+  "name": "agent-spinners",
+  "version": "0.1.0",
+  "description": "Band above the prompt listing subagents with braille spinners while they run",
+  "author": { "name": "wcampbell" },
+  "types": "./types/index.d.ts"
+}

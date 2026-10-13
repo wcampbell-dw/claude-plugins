@@ -39,3 +39,24 @@ Needs a [Nerd Font](https://www.nerdfonts.com/) in your terminal, and `bash`, `j
 ```
 /plugin install swap --marketplace wcampbell-dw/claude-plugins
 ```
+
+### agent-spinners
+
+A band above the prompt with one row per subagent: a braille spinner while it runs, its type, then its description.
+
+```
+⠹ general-purpose  Fix the flaky login test
+⠼ mattpoc…research Look up the retry API
+✓ Explore          Survey plugin manifests
+```
+
+- Running agents spin in cyan; queued or blocked ones spin slower in yellow. An idle teammate holds its last frame in gray.
+- The description dims after 5 seconds without a status change or tool call, and brightens on the next one.
+- Finished agents show ✓ (or ✗ when they failed or were stopped) for 8 seconds, then drop off. The band disappears when no agents are left.
+- Types are fixed at 16 columns. A long `plugin:agent` name gives up its plugin name first (`mattpoc…research`, then `research`), and only then is the agent name cut.
+
+```
+/plugin install agent-spinners --marketplace wcampbell-dw/claude-plugins
+```
+
+The spinners animate in the terminal and the desktop app; other surfaces show a static `●`. Claude Code's own subagent list still shows below it.
