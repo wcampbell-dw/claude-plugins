@@ -1,6 +1,6 @@
 {
   "name": "wcampbell",
-  "description": "Claude Code plugins: live subagent spinners, a Nerd Font status line, and account switching",
+  "description": "Claude Code plugins: live subagent spinners, a Nerd Font status line, account switching, and cost-saving subagents",
   "owner": { "name": "wcampbell" },
   "plugins": [
     {
@@ -17,6 +17,11 @@
       "name": "agent-spinners",
       "source": "./plugins/agent-spinners",
       "description": "Band above the prompt listing subagents with braille spinners while they run"
+    },
+    {
+      "name": "subagent-kit",
+      "source": "./plugins/subagent-kit",
+      "description": "Scoper, implementer, reviewer and shipper subagents on cheaper models, with rules for when to delegate"
     }
   ]
 }

@@ -6,6 +6,7 @@ A small collection of [Claude Code](https://claude.com/claude-code) plugins:
 | --- | --- |
 | [agent-spinners](#agent-spinners) | Live list of running subagents above the prompt, with braille spinners and toasts when they finish |
 | [statusline](#statusline) | Three-line status line: directory and git, model and context, account and usage limits |
+| [subagent-kit](#subagent-kit) | Subagents on cheaper models for scoping, implementing, reviewing and shipping, with rules for when to use them |
 | [swap](#swap) | `/swap` slash command to switch Claude accounts with `cswap` |
 
 ## Getting started
@@ -68,6 +69,26 @@ To undo it, run `/statusline-uninstall`. It puts back the `statusLine` setting a
 > The plugin overwrites `~/.claude/statusline.sh` at every session start. It keeps the first file it replaces, which `/statusline-uninstall` restores. A file replaced before this version of the plugin is not kept.
 
 **Needs:** a [Nerd Font](https://www.nerdfonts.com/) in your terminal, and `bash`, `jq` and `git` on your PATH (on Windows, Git Bash provides `bash`). It's built and tested on Windows under Git Bash. It sticks to plain bash, `jq` and `git`, so macOS and Linux should work, but they haven't been tested.
+
+### subagent-kit
+
+Four subagents that take work off the main session's model, and the rules for when the main session hands work to them. Based on Andrea Grandi's [Using Claude Code subagents to save usage](https://www.andreagrandi.it/posts/claude-code-subagents-to-save-usage/).
+
+| Agent | Model | Job |
+| --- | --- | --- |
+| `subagent-kit:scoper` | Haiku | Read-only. Gathers the goal, acceptance criteria, relevant files and tests before planning |
+| `subagent-kit:implementer` | Sonnet | Writes code and tests for a task already planned. Does not commit |
+| `subagent-kit:reviewer` | Opus | Read-only. Independent review, only when you ask or the change is risky |
+| `subagent-kit:shipper` | Haiku | Commits, pushes and opens pull requests, only the steps you asked for |
+
+The rules (`plugins/subagent-kit/DELEGATION.md`) are added to the main session's system prompt, the way an `@` import in `~/.claude/CLAUDE.md` would add them. Subagents don't get them. The main session plans, reviews every diff the implementer returns and runs the tests, and the cheaper models do the reading, the editing and the git work.
+
+```
+/plugin install subagent-kit --marketplace wcampbell-dw/claude-plugins
+```
+
+> [!NOTE]
+> If you already have agents named `scoper`, `implementer`, `reviewer` or `shipper` in `~/.claude/agents`, or delegation rules in your `CLAUDE.md`, remove them. Otherwise the main session sees both sets.
 
 ### swap
 
