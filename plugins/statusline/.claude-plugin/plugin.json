@@ -2,5 +2,6 @@
   "name": "statusline",
   "version": "0.1.0",
   "description": "Three-line Nerd Font status line: cwd and git, model and context, account and usage",
-  "author": { "name": "wcampbell" }
+  "author": { "name": "wcampbell" },
+  "license": "MIT-0"
 }

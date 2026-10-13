@@ -2,5 +2,6 @@
   "name": "swap",
   "version": "0.1.0",
   "description": "/swap: switch Claude accounts with cswap",
-  "author": { "name": "wcampbell" }
+  "author": { "name": "wcampbell" },
+  "license": "MIT-0"
 }

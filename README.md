@@ -84,3 +84,7 @@ agent-spinners and statusline are built on Claude Code's plugin hooks API, which
 ## Issues
 
 Found a bug or have an idea? [Open an issue](https://github.com/wcampbell-dw/claude-plugins/issues).
+
+## License
+
+[MIT No Attribution](LICENSE) (MIT-0): use, copy, modify and share the code however you like, with no need to credit anyone.
