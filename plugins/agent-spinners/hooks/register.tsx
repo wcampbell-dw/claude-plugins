@@ -273,6 +273,22 @@ async function notified($: Engine, text: string) {
   watch($)
 }
 
+// Ends the tasks the engine no longer lists as in flight. A subagent's task
+// notifications go to that subagent, never through `prompt.submit` here, so
+// this is how its tasks are seen to end.
+async function reconcile($: Engine, inFlight: readonly { id: string }[] | undefined) {
+  if (!inFlight) return
+
+  const live = new Set(inFlight.map(task => task.id))
+  const now = await $.clock.now()
+  await update($, tasksAtom, tasks =>
+    tasks.map(task =>
+      task.status === 'running' && !live.has(task.id) ? { ...task, status: 'completed', changedAt: now } : task,
+    ),
+  )
+  watch($)
+}
+
 export const register: Register = on => {
   on('session.start', ($, e, next) => {
     watch($)
@@ -303,6 +319,20 @@ export const register: Register = on => {
   // prompt. Only observed: the prompt goes on unchanged.
   on('prompt.submit', async ($, e, next) => {
     if (e.origin.kind === 'task-notification') await notified($, e.text)
+
+    return next(e)
+  })
+
+  // Each stop of the main loop or a subagent lists the background work still
+  // in flight. Only observed.
+  on('classic.Stop', async ($, e, next) => {
+    await reconcile($, e.background_tasks)
+
+    return next(e)
+  })
+
+  on('classic.SubagentStop', async ($, e, next) => {
+    await reconcile($, e.background_tasks)
 
     return next(e)
   })

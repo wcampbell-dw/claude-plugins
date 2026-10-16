@@ -495,6 +495,49 @@ test('a monitor still running past its timeout is taken to have ended', async ($
   await ui.unmount()
 })
 
+test('a stop ends the tasks it no longer lists as in flight', async ($, on) => {
+  const clock = mock.clock(on)
+  const agents: AgentInfo[] = [{ id: 'a1', description: 'Fix the test', type: 'implementer', status: 'running' }]
+  setup(on, () => agents)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  let next = 0
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { ...BASH_BG, backgroundTaskId: `b${++next}` } }))
+  on('classic.Stop', () => ({}))
+  on('classic.SubagentStop', () => ({}))
+  await spawn($, 'Fix the test')
+
+  await $.tool.call({ tool: 'Bash', command: 'npm test', description: 'Run the tests', run_in_background: true, agentId: 'a1' })
+  await $.tool.call({ tool: 'Bash', command: 'npm run dev', description: 'Serve the app', run_in_background: true })
+  await clock.advance(0)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  // Whether a task's row, by its label after the `shell` column, says finished.
+  const finished = async (label: string) =>
+    new RegExp(`shell\\s+${label}\\s+› finished`).test((await drawn(ui)).join(''))
+
+  // A stop that gives no list says nothing.
+  await $.classic.Stop({ stop_hook_active: false })
+  await clock.advance(500)
+  expect((await drawn(ui)).join('')).not.toContain('finished')
+
+  // The agent's command is gone from the list: it finished; the other runs on.
+  await $.classic.SubagentStop({
+    stop_hook_active: false,
+    agent_id: 'a1',
+    agent_transcript_path: '',
+    agent_type: 'implementer',
+    background_tasks: [{ id: 'b2', type: 'shell', status: 'running', description: 'Serve the app' }],
+  })
+  await clock.advance(500)
+  expect(await finished('Run the tests')).toBe(true)
+  expect(await finished('Serve the app')).toBe(false)
+
+  // An empty list ends the rest.
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: [] })
+  await clock.advance(500)
+  expect(await finished('Serve the app')).toBe(true)
+  await ui.unmount()
+})
+
 test('a prompt that is not a notification changes no task', async ($, on) => {
   const clock = mock.clock(on)
   setup(on, () => [])
