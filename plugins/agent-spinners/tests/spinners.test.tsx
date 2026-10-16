@@ -1,5 +1,6 @@
-import type { AgentInfo } from 'claude-code'
+import type { AgentInfo, On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
+import type { Engine } from 'claude-code/testing'
 
 const BAND = {
   plugin: 'agent-spinners',
@@ -159,13 +160,13 @@ test('an idle agent holds its last frame in gray', async ($, on) => {
   await clock.advance(500)
   await ui.advance(400)
   expect((await mark())?.text).toBe('⠸ ')
-  expect((await mark())?.props.color).toBe('gray')
+  expect((await mark())?.props.color).toBe('inactive')
 
-  // Back to running, it spins on from the live frame in cyan.
+  // Back to running, it spins on from the live frame in magenta.
   agents = [{ ...agents[0]!, status: 'running' }]
   await clock.advance(500)
   await ui.advance(80)
-  expect((await mark())?.props.color).toBe('cyan')
+  expect((await mark())?.props.color).toBe('merged')
   expect((await mark())?.text).not.toBe('⠸ ')
   await ui.unmount()
 })
@@ -284,12 +285,270 @@ test("a row shows the agent's latest tool call beside its title", async ($, on) 
   agents = [{ ...agents[0]!, status: 'completed' }]
   await clock.advance(500)
   expect(await row()).toBe('Scope the repo › finished')
-  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'finished' }))?.props.color).toBe('green')
-  expect((await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]?.props.color).toBe('gray')
+  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'finished' }))?.props.color).toBe('success')
+  expect((await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]?.props.color).toBe('inactive')
 
   agents = [{ ...agents[0]!, status: 'killed' }]
   await clock.advance(500)
   expect(await row()).toBe('Scope the repo › stopped')
-  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'stopped' }))?.props.color).toBe('red')
+  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'stopped' }))?.props.color).toBe('error')
+  await ui.unmount()
+})
+
+const BASH_BG = { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b1' }
+
+const notify = (blocks: string[]) => blocks.map(block => `<task-notification>\n${block}\n</task-notification>`).join('\n')
+
+
+// The shared mocks: the agents listed, a band the engine draws, and the prompt
+// chain answered at the bottom.
+function setup(on: On, agents: () => AgentInfo[]) {
+  on('agent.list', () => ({ value: agents() }))
+  on('prompt.submit', (_$, e) => ({ text: e.text }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box key="engine" />
+  })
+}
+
+const submit = ($: Engine, text: string, kind: 'task-notification' | 'composer' = 'task-notification') =>
+  $.prompt.submit({ text, wait: false, origin: { kind } as never })
+
+const spawn = ($: Engine, description: string) =>
+  $.agent.spawn({
+    tool_use_id: 't1',
+    prompt: 'go',
+    description,
+    subagentType: 'implementer',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: true,
+    fork: false,
+  })
+
+const drawn = async (ui: { findAll: (q: object) => Promise<{ text: string }[]> }) =>
+  (await ui.findAll({ in: 'agent-spinners', type: 'Text' })).map(t => t.text)
+
+test('a background command gets a top-level shell row until its notification', async ($, on) => {
+  const clock = mock.clock(on)
+  setup(on, () => [])
+  on('tool.call', { tool: 'Bash' }, () => ({ result: BASH_BG }))
+
+  await $.tool.call({ tool: 'Bash', command: 'npm  test', description: 'Run the   login tests', run_in_background: true })
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const text = async () => (await drawn(ui)).join('')
+  expect(await text()).toContain('shell ')
+  expect(await text()).toContain('Run the login tests')
+  expect(await text()).not.toContain('└')
+  expect((await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]?.props.color).toBe('planMode')
+
+  // An id that isn't tracked changes nothing.
+  await submit($, notify(['<task-id>zzz</task-id>\n<status>failed</status>']))
+  await clock.advance(500)
+  expect(await text()).not.toContain('failed')
+
+  await submit(
+    $,
+    notify(['<task-id>b1</task-id>\n<output-file>x</output-file>\n<status>completed</status>\n<summary>done</summary>']),
+  )
+  await clock.advance(500)
+  expect(await text()).toContain('finished')
+  expect((await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]?.props.color).toBe('inactive')
+
+  // Up for 8s after it ended, then gone.
+  await clock.advance(7000)
+  expect(await text()).toContain('finished')
+  await clock.advance(1500)
+  expect(await ui.find({ key: 'engine' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a monitor an agent started sits under that agent, its type fitted to 12 columns', async ($, on) => {
+  const clock = mock.clock(on)
+  const agents: AgentInfo[] = [
+    { id: 'a1', description: 'Fix the test', type: 'implementer', status: 'running' },
+    { id: 'a2', description: 'Other agent', type: 'scoper', status: 'running' },
+  ]
+  setup(on, () => agents)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('tool.call', { tool: 'Monitor' }, () => ({ result: { taskId: 'm1', timeoutMs: 0, persistent: true } }))
+  await spawn($, 'Fix the test')
+
+  await $.tool.call({
+    tool: 'Monitor',
+    command: 'tail -f log',
+    description: 'errors in deploy.log',
+    timeout_ms: 0,
+    agentId: 'a1',
+  })
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const texts = await drawn(ui)
+
+  // The agent, its child, then the other agent.
+  const at = (re: RegExp) => texts.findIndex(t => re.test(t))
+  expect(at(/Fix the test/)).toBeLessThan(at(/errors in deploy\.log/))
+  expect(at(/errors in deploy\.log/)).toBeLessThan(at(/Other agent/))
+  expect(texts).toContain('  └ ')
+  expect(texts).toContain('monitor      ')
+  await ui.unmount()
+})
+
+test('a monitor event shows as activity and a TaskStop shows stopped', async ($, on) => {
+  const clock = mock.clock(on)
+  setup(on, () => [])
+  on('tool.call', { tool: 'Monitor' }, () => ({ result: { taskId: 'm1', timeoutMs: 0, persistent: true } }))
+  on('tool.call', { tool: 'TaskStop' }, () => ({ result: { message: 'stopped', task_id: 'm1', task_type: 'monitor' } }))
+
+  await $.tool.call({ tool: 'Monitor', command: 'tail -f log', description: 'errors in deploy.log', timeout_ms: 0 })
+  await clock.advance(0)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const text = async () => (await drawn(ui)).join('')
+
+  await clock.advance(6000)
+  const label = async () =>
+    (await ui.find({ in: 'agent-spinners', type: 'Text', text: /errors in deploy/ }))?.props.dimColor
+  expect(await label()).toBe(true)
+
+  await submit(
+    $,
+    '<task-notification>\n<task-id>m1</task-id>\n<summary>Monitor event: "x"</summary>\n<event>  ERROR:   timeout\nafter 30s </event>\nIf this event is something...\n</task-notification>',
+  )
+  await clock.advance(500)
+  expect(await text()).toContain('ERROR: timeout')
+  expect(await text()).not.toContain('after 30s')
+  expect(await label()).toBeFalsy()
+
+  await $.tool.call({ tool: 'TaskStop', task_id: 'm1' })
+  await clock.advance(500)
+  expect(await text()).toContain('stopped')
+  expect(await text()).not.toContain('ERROR')
+  await ui.unmount()
+})
+
+test('one prompt text carrying two notifications updates both tasks', async ($, on) => {
+  const clock = mock.clock(on)
+  setup(on, () => [])
+  let n = 0
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { ...BASH_BG, backgroundTaskId: `b${++n}` } }))
+
+  await $.tool.call({ tool: 'Bash', command: 'one', description: 'First job', run_in_background: true })
+  await $.tool.call({ tool: 'Bash', command: 'two', description: 'Second job', run_in_background: true })
+  await clock.advance(0)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+
+  await submit(
+    $,
+    notify(['<task-id>b1</task-id>\n<status>completed</status>', '<task-id>b2</task-id>\n<status>failed</status>']),
+  )
+  await clock.advance(500)
+  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'finished' }))?.props.color).toBe('success')
+  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'failed' }))?.props.color).toBe('error')
+  await ui.unmount()
+})
+
+test('a task that ends with its agent is stopped when the agent completes', async ($, on) => {
+  const clock = mock.clock(on)
+  let agents: AgentInfo[] = [{ id: 'a1', description: 'Fix the test', type: 'implementer', status: 'running' }]
+  setup(on, () => agents)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { ...BASH_BG, backgroundEndsWithFinalResponse: true } }))
+  await spawn($, 'Fix the test')
+
+  await $.tool.call({
+    tool: 'Bash',
+    command: 'sleep 99',
+    description: 'Wait around',
+    run_in_background: true,
+    agentId: 'a1',
+  })
+  await clock.advance(0)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await clock.advance(1000)
+  expect((await drawn(ui)).join('')).not.toContain('stopped')
+
+  agents = [{ ...agents[0]!, status: 'completed' }]
+  await clock.advance(500)
+  const stopped = await ui.findAll({ in: 'agent-spinners', type: 'Text', text: 'stopped' })
+  expect(stopped).toHaveLength(1)
+  expect(stopped[0]?.props.color).toBe('error')
+  await ui.unmount()
+})
+
+test('a monitor still running past its timeout is taken to have ended', async ($, on) => {
+  const clock = mock.clock(on)
+  setup(on, () => [])
+  on('tool.call', { tool: 'Monitor' }, () => ({ result: { taskId: 'm1', timeoutMs: 10000 } }))
+
+  await $.tool.call({ tool: 'Monitor', command: 'tail -f log', description: 'Watch the log', timeout_ms: 10000 })
+  await clock.advance(0)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+
+  await clock.advance(14000)
+  expect((await drawn(ui)).join('')).not.toContain('finished')
+  await clock.advance(1500)
+  expect((await drawn(ui)).join('')).toContain('finished')
+  await ui.unmount()
+})
+
+test('a stop ends the tasks it no longer lists as in flight', async ($, on) => {
+  const clock = mock.clock(on)
+  const agents: AgentInfo[] = [{ id: 'a1', description: 'Fix the test', type: 'implementer', status: 'running' }]
+  setup(on, () => agents)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  let next = 0
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { ...BASH_BG, backgroundTaskId: `b${++next}` } }))
+  on('classic.Stop', () => ({}))
+  on('classic.SubagentStop', () => ({}))
+  await spawn($, 'Fix the test')
+
+  await $.tool.call({ tool: 'Bash', command: 'npm test', description: 'Run the tests', run_in_background: true, agentId: 'a1' })
+  await $.tool.call({ tool: 'Bash', command: 'npm run dev', description: 'Serve the app', run_in_background: true })
+  await clock.advance(0)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  // Whether a task's row, by its label after the `shell` column, says finished.
+  const finished = async (label: string) =>
+    new RegExp(`shell\\s+${label}\\s+› finished`).test((await drawn(ui)).join(''))
+
+  // A stop that gives no list says nothing.
+  await $.classic.Stop({ stop_hook_active: false })
+  await clock.advance(500)
+  expect((await drawn(ui)).join('')).not.toContain('finished')
+
+  // The agent's command is gone from the list: it finished; the other runs on.
+  await $.classic.SubagentStop({
+    stop_hook_active: false,
+    agent_id: 'a1',
+    agent_transcript_path: '',
+    agent_type: 'implementer',
+    background_tasks: [{ id: 'b2', type: 'shell', status: 'running', description: 'Serve the app' }],
+  })
+  await clock.advance(500)
+  expect(await finished('Run the tests')).toBe(true)
+  expect(await finished('Serve the app')).toBe(false)
+
+  // An empty list ends the rest.
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: [] })
+  await clock.advance(500)
+  expect(await finished('Serve the app')).toBe(true)
+  await ui.unmount()
+})
+
+test('a prompt that is not a notification changes no task', async ($, on) => {
+  const clock = mock.clock(on)
+  setup(on, () => [])
+  on('tool.call', { tool: 'Bash' }, () => ({ result: BASH_BG }))
+
+  await $.tool.call({ tool: 'Bash', command: 'npm test', description: 'Run the tests', run_in_background: true })
+  await clock.advance(0)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+
+  await submit($, notify(['<task-id>b1</task-id>\n<status>completed</status>']), 'composer')
+  await clock.advance(500)
+  expect((await drawn(ui)).join('')).not.toContain('finished')
   await ui.unmount()
 })

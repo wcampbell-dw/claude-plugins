@@ -4,7 +4,7 @@ A small collection of [Claude Code](https://claude.com/claude-code) plugins:
 
 | Plugin | What it does |
 | --- | --- |
-| [agent-spinners](#agent-spinners) | Live list of running subagents above the prompt, with braille spinners and toasts when they finish |
+| [agent-spinners](#agent-spinners) | Live list of running subagents and background tasks above the prompt, with braille spinners and toasts when agents finish |
 | [statusline](#statusline) | Three-line status line: directory and git, model and context, account and usage limits |
 | [subagent-kit](#subagent-kit) | Subagents on cheaper models for scoping, implementing, reviewing and shipping, with rules for when to use them |
 | [swap](#swap) | `/swap` slash command to switch Claude accounts with `cswap` |
@@ -23,17 +23,20 @@ Then install the plugins you want with the commands below, or browse them with `
 
 ### agent-spinners
 
-A band above the prompt with one row per subagent: a spinner showing its state, its agent type, its task, then its latest tool call.
+A band above the prompt with one row per subagent and per background task: a spinner showing its state, its agent type (or `shell` or `monitor`), its task, then its latest tool call or event.
 
 ```
 ⠹ general-purpose  Fix the flaky login test         › Bash: Run the login tests
 ⠼ acme-to…reviewer Review the retry logic           › Read: retry.ts
+  └ ⠴ shell        Run the login tests in a loop
 ⠸ Explore          Survey plugin manifests          › finished
+⠸ monitor          errors in deploy.log             › ERROR: timeout after 30s
 ```
 
-- **Spinners:** running agents spin in cyan, and queued or blocked ones spin slower in yellow. An idle teammate freezes on its last frame in gray.
+- **Spinners:** running agents spin in magenta and running tasks in cyan, and queued or blocked ones spin slower in yellow. An idle teammate freezes on its last frame in gray. The colors come from your Claude Code theme; pick an "ANSI colors only" theme in `/theme` to have them follow your terminal's palette, as the statusline does.
 - **Activity:** after the `›`, each row shows the agent's latest tool call: Bash by its description, file tools by the file's name, searches by their pattern. A live row dims after 5 seconds without a status change or tool call, and brightens again on the next one.
-- **Finishing:** an agent that ends freezes its spinner in gray and shows **finished** in green, or **failed** or **stopped** in red, at full brightness for 8 seconds, then drops off. The band disappears when no agents are left.
+- **Finishing:** an agent that ends freezes its spinner in gray and shows **finished** in green, or **failed** or **stopped** in red, at full brightness for 8 seconds, then drops off. The band disappears when no agents or tasks are left.
+- **Background tasks:** Bash commands running in the background and Monitor watches get a row of their own, with `shell` or `monitor` in place of an agent type. One started by a subagent sits directly under that agent's row, marked with `└`; the rest come after the agents. A task row spins and dims like an agent's, and shows **finished**, **failed** or **stopped** when it ends, then drops off after 8 seconds. A monitor row shows its latest event in place of a tool call. Tasks raise no toasts.
 - **Toasts:** a toast tells you when an agent finishes, fails or is stopped, and stays up longer when one is waiting on you, for example at a permission prompt.
 - **Long names:** agent types get a fixed 16 columns and tasks 32, cut with `…`, so rows line up. A long `plugin:agent` name gives up its plugin name first (`acme-to…reviewer`, then `reviewer`), and only then is the agent name cut.
 
