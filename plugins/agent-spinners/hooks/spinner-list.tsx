@@ -41,9 +41,34 @@ const shorten = (name: string, width: number) => {
 
 const fit = (name: string, width: number) => shorten(name, width).padEnd(width)
 
-// Fits the title to LABEL_WIDTH so the status column lines up.
-const fitLabel = (label: string) =>
-  (label.length <= LABEL_WIDTH ? label : `${label.slice(0, LABEL_WIDTH - 1)}…`).padEnd(LABEL_WIDTH)
+// Fits the title to `width` so the status column lines up.
+const fitLabel = (label: string, width: number) =>
+  (label.length <= width ? label : `${label.slice(0, width - 1)}…`).padEnd(width)
+
+// The spinner and its space, and the space after the type column.
+const MARK_WIDTH = 2
+const GAP = 1
+const SEPARATOR = ' › '
+// The narrowest the type column and title get before the next one gives way,
+// and the least of a status worth drawing.
+const MIN_NAME = 8
+const MIN_LABEL = 8
+const MIN_STATUS = 4
+
+type Layout = { name: number; label: number; status: boolean }
+
+// Sizes the columns to the band's width so a row never wraps: the title gives
+// way first, then the type column, and the status shows only with room left.
+// Before the first layout (`columns` 0), the full widths.
+const layout = (columns: number): Layout => {
+  if (columns <= 0) return { name: NAME_WIDTH, label: LABEL_WIDTH, status: true }
+
+  const name = Math.max(MIN_NAME, Math.min(NAME_WIDTH, columns - MARK_WIDTH - GAP - MIN_LABEL))
+  const label = Math.max(0, Math.min(LABEL_WIDTH, columns - MARK_WIDTH - GAP - name))
+  const rest = columns - MARK_WIDTH - GAP - name - label
+
+  return { name, label, status: rest >= SEPARATOR.length + MIN_STATUS }
+}
 
 type State = { frame: number }
 
@@ -82,6 +107,7 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
 
   const frame = surface.state?.frame ?? 0
   const { Box, Text } = surface.elements
+  const widths = layout(surface.columns)
 
   const ids = new Set(props.rows.map(row => row.id))
   for (const id of shownFrame.keys()) {
@@ -93,15 +119,35 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
       {props.rows.map(row => {
         const { mark, color } = glyph(row, frame)
         const ended = ENDED[row.status]
-        const status = ended ?? (row.activity ? { text: row.activity, color: undefined } : undefined)
+        const status = widths.status
+          ? (ended ?? (row.activity ? { text: row.activity, color: undefined } : undefined))
+          : undefined
 
+        // Every run truncates rather than wraps, should the band still be
+        // narrower than the columns at their least.
         return (
           <Box key={row.id}>
-            {row.isChild ? <Text dimColor>{CHILD_LEAD}</Text> : null}
-            <Text color={color}>{mark} </Text>
-            <Text dimColor>{fit(row.type, row.isChild ? NAME_WIDTH - CHILD_INDENT : NAME_WIDTH)} </Text>
-            <Text dimColor={row.isQuiet}>{fitLabel(row.label)}</Text>
-            {status ? <Text dimColor> › </Text> : null}
+            {row.isChild ? (
+              <Text dimColor wrap="truncate-end">
+                {CHILD_LEAD}
+              </Text>
+            ) : null}
+            <Text color={color} wrap="truncate-end">
+              {`${mark} `}
+            </Text>
+            <Text dimColor wrap="truncate-end">
+              {`${fit(row.type, row.isChild ? widths.name - CHILD_INDENT : widths.name)} `}
+            </Text>
+            {widths.label > 0 ? (
+              <Text dimColor={row.isQuiet} wrap="truncate-end">
+                {fitLabel(row.label, widths.label)}
+              </Text>
+            ) : null}
+            {status ? (
+              <Text dimColor wrap="truncate-end">
+                {SEPARATOR}
+              </Text>
+            ) : null}
             {status ? (
               <Text color={status.color} dimColor={row.isQuiet} wrap="truncate-end">
                 {status.text}
