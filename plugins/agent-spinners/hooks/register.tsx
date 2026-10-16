@@ -16,10 +16,39 @@ const POLL_MS = 500
 const TOAST_MS = 6000
 const ATTENTION_TOAST_MS = 12000
 
+// What the status column says for an agent that has ended.
+const ENDED: Record<string, string> = { completed: 'finished', failed: 'failed', killed: 'stopped' }
+
+// The longest activity text kept; the row cuts it shorter at the edge.
+const ACTIVITY_MAX = 80
+
 let timer: Timer | undefined
 let last = '[]'
 const lastStatus = new Map<string, string>()
 const changedAt = new Map<string, number>()
+const activity = new Map<string, string>()
+
+// The argument that says what a call is doing, by preference: Bash's
+// description before its command, a file by its name alone.
+const ARG_KEYS = ['description', 'file_path', 'notebook_path', 'pattern', 'query', 'url', 'command', 'skill', 'prompt']
+
+const describe = (e: { tool: string }) => {
+  const args = e as unknown as Record<string, unknown>
+  // An MCP tool (`mcp__server__tool`) goes by its own name.
+  const tool = e.tool.startsWith('mcp__') ? e.tool.split('__').slice(2).join('__') || e.tool : e.tool
+
+  for (const key of ARG_KEYS) {
+    const value = args[key]
+    if (typeof value !== 'string' || !value.trim()) continue
+
+    const text = key.endsWith('_path') ? (value.split(/[\\/]/).pop() ?? value) : value
+    const line = `${tool}: ${text.replace(/\s+/g, ' ').trim()}`
+
+    return line.length > ACTIVITY_MAX ? `${line.slice(0, ACTIVITY_MAX - 1)}…` : line
+  }
+
+  return tool
+}
 
 // What a toast says when an agent moves into a status, by status; a status
 // not listed here raises no toast.
@@ -60,8 +89,15 @@ async function refresh($: Engine) {
       label: agent.description || agent.name || agent.type,
       type: agent.type,
       status: agent.status,
-      isQuiet: sinceChange >= QUIET_MS,
+      // An agent that has ended stays bright until it drops off.
+      isQuiet: ACTIVE.has(agent.status) && sinceChange >= QUIET_MS,
+      ...(ACTIVE.has(agent.status) && activity.has(agent.id) ? { activity: activity.get(agent.id) } : {}),
     })
+  }
+
+  const listed = new Set(rows.map(row => row.id))
+  for (const id of activity.keys()) {
+    if (!listed.has(id)) activity.delete(id)
   }
 
   const next = JSON.stringify(rows)
@@ -101,7 +137,10 @@ export const register: Register = on => {
   })
 
   on('tool.call', async ($, e, next) => {
-    if (e.agentId) void touch($, e.agentId)
+    if (e.agentId) {
+      activity.set(e.agentId, describe(e))
+      void touch($, e.agentId)
+    }
     const result = await next(e)
     if (e.agentId) void touch($, e.agentId)
 
@@ -127,7 +166,8 @@ export const register: Register = on => {
       <Box flexDirection="column">
         {rows.map(row => (
           <Text key={row.id} dimColor={row.isQuiet}>
-            {ACTIVE.has(row.status) ? '●' : row.status === 'completed' ? '✓' : '✗'} {row.label}
+            {ACTIVE.has(row.status) ? '●' : '○'} {row.label}
+            {ENDED[row.status] ?? row.activity ? ` › ${ENDED[row.status] ?? row.activity}` : ''}
           </Text>
         ))}
       </Box>

@@ -65,11 +65,12 @@ test('running agents spin, then tick and drop off', async ($, on) => {
 
   agents = [{ ...agents[0]!, status: 'completed' }]
   await clock.advance(500)
-  expect((await ui.find({ in: 'agent-spinners', text: '✓ ' }))).toBeDefined()
+  expect((await ui.find({ in: 'agent-spinners', text: 'finished' }))).toBeDefined()
 
-  // A finished row outlasts the quiet time: still up at 6s.
+  // A finished row outlasts the quiet time, still up and still bright at 6s.
   await clock.advance(6000)
-  expect((await ui.find({ in: 'agent-spinners', text: '✓ ' }))).toBeDefined()
+  expect((await ui.find({ in: 'agent-spinners', text: 'finished' }))?.props.dimColor).toBeFalsy()
+  expect(await label()).toBeFalsy()
 
   await clock.advance(3000)
   expect(await ui.find({ key: 'engine' })).toBeDefined()
@@ -219,4 +220,76 @@ test('a toast says when agents finish or need attention', async ($, on) => {
   agents = [agents[0]!, { ...agents[1]!, status: 'failed' }, agents[2]!]
   await clock.advance(500)
   expect(toasts[3]?.text).toBe('✗ implementer failed: Fix the test')
+})
+
+test("a row shows the agent's latest tool call beside its title", async ($, on) => {
+  const clock = mock.clock(on)
+  let agents: AgentInfo[] = [{ id: 'a1', description: 'Scope the repo', type: 'scoper', status: 'running' }]
+
+  on('agent.list', () => ({ value: agents }))
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('tool.call', () => ({ result: {} }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box key="engine" />
+  })
+
+  await $.agent.spawn({
+    tool_use_id: 't1',
+    prompt: 'go',
+    description: 'Scope the repo',
+    subagentType: 'scoper',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: true,
+    fork: false,
+  })
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  // The row past the spinner and the type, its padding squeezed.
+  const row = async () =>
+    (await ui.findAll({ in: 'agent-spinners', type: 'Text' }))
+      .slice(2)
+      .map(t => t.text)
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim()
+
+  // Nothing called yet: the title alone, padded to a fixed column.
+  expect(await row()).toBe('Scope the repo')
+  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: /Scope the repo/ }))?.text).toHaveLength(32)
+
+  // Bash goes by its description, a file by its name, an MCP tool by its own name.
+  await $.tool.call({ tool: 'Bash', command: 'npm test', description: 'Run the tests', agentId: 'a1' })
+  await clock.advance(0)
+  expect(await row()).toBe('Scope the repo › Bash: Run the tests')
+
+  await $.tool.call({ tool: 'Read', file_path: 'C:\\repo\\hooks\\register.tsx', agentId: 'a1' })
+  await clock.advance(0)
+  expect(await row()).toBe('Scope the repo › Read: register.tsx')
+
+  await $.tool.call({ tool: 'mcp__docs__lookup', agentId: 'a1' })
+  await clock.advance(0)
+  expect(await row()).toBe('Scope the repo › lookup')
+
+  // A main-loop call names no agent and changes no row.
+  await $.tool.call({ tool: 'Glob', pattern: '**/*.ts' })
+  await clock.advance(0)
+  expect(await row()).toBe('Scope the repo › lookup')
+
+  // An agent that has ended says so in the status column, in place of its
+  // last call, its spinner stopped in gray.
+  agents = [{ ...agents[0]!, status: 'completed' }]
+  await clock.advance(500)
+  expect(await row()).toBe('Scope the repo › finished')
+  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'finished' }))?.props.color).toBe('green')
+  expect((await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]?.props.color).toBe('gray')
+
+  agents = [{ ...agents[0]!, status: 'killed' }]
+  await clock.advance(500)
+  expect(await row()).toBe('Scope the repo › stopped')
+  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'stopped' }))?.props.color).toBe('red')
+  await ui.unmount()
 })

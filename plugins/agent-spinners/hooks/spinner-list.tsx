@@ -5,6 +5,15 @@ import type { AgentRow } from '../types'
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const FRAME_MS = 80
 const NAME_WIDTH = 16
+const LABEL_WIDTH = 32
+
+// What the status column says for an agent that has ended, in place of its
+// last tool call.
+const ENDED: Record<string, { text: string; color: string }> = {
+  completed: { text: 'finished', color: 'green' },
+  failed: { text: 'failed', color: 'red' },
+  killed: { text: 'stopped', color: 'red' },
+}
 
 // The fewest characters of a plugin's name worth keeping before dropping it.
 const MIN_PLUGIN = 3
@@ -27,6 +36,10 @@ const shorten = (name: string) => {
 
 const fit = (name: string) => shorten(name).padEnd(NAME_WIDTH)
 
+// Fits the title to LABEL_WIDTH so the status column lines up.
+const fitLabel = (label: string) =>
+  (label.length <= LABEL_WIDTH ? label : `${label.slice(0, LABEL_WIDTH - 1)}…`).padEnd(LABEL_WIDTH)
+
 type State = { frame: number }
 
 // The spinner frame each row last drew, so an idle row can hold it.
@@ -46,13 +59,9 @@ const glyph = (row: AgentRow, frame: number) => {
     case 'waiting':
       // Slower spin for an agent that's queued or blocked.
       return spin(row, Math.floor(frame / 3), 'yellow')
-    case 'idle':
-      // Frozen on the frame it stopped at.
-      return { mark: FRAMES[(shownFrame.get(row.id) ?? 0) % FRAMES.length], color: 'gray' }
-    case 'completed':
-      return { mark: '✓', color: 'green' }
     default:
-      return { mark: '✗', color: 'red' }
+      // Idle or ended: frozen on the frame it stopped at.
+      return { mark: FRAMES[(shownFrame.get(row.id) ?? 0) % FRAMES.length], color: 'gray' }
   }
 }
 
@@ -75,12 +84,20 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
     <Box flexDirection="column">
       {props.rows.map(row => {
         const { mark, color } = glyph(row, frame)
+        const ended = ENDED[row.status]
+        const status = ended ?? (row.activity ? { text: row.activity, color: undefined } : undefined)
 
         return (
           <Box key={row.id}>
             <Text color={color}>{mark} </Text>
             <Text dimColor>{fit(row.type)} </Text>
-            <Text dimColor={row.isQuiet}>{row.label}</Text>
+            <Text dimColor={row.isQuiet}>{fitLabel(row.label)}</Text>
+            {status ? <Text dimColor> › </Text> : null}
+            {status ? (
+              <Text color={status.color} dimColor={row.isQuiet} wrap="truncate-end">
+                {status.text}
+              </Text>
+            ) : null}
           </Box>
         )
       })}

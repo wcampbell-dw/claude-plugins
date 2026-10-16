@@ -23,25 +23,25 @@ Then install the plugins you want with the commands below, or browse them with `
 
 ### agent-spinners
 
-A band above the prompt with one row per subagent: a spinner showing its state, its agent type, then what it's working on.
+A band above the prompt with one row per subagent: a spinner showing its state, its agent type, its task, then its latest tool call.
 
 ```
-⠹ general-purpose  Fix the flaky login test
-⠼ acme-to…reviewer Review the retry logic
-✓ Explore          Survey plugin manifests
+⠹ general-purpose  Fix the flaky login test         › Bash: Run the login tests
+⠼ acme-to…reviewer Review the retry logic           › Read: retry.ts
+⠸ Explore          Survey plugin manifests          › finished
 ```
 
 - **Spinners:** running agents spin in cyan, and queued or blocked ones spin slower in yellow. An idle teammate freezes on its last frame in gray.
-- **Activity:** an agent's description dims after 5 seconds without a status change or tool call, and brightens again on the next one.
-- **Finishing:** finished agents show ✓ (or ✗ when they failed or were stopped) for 8 seconds, then drop off. The band disappears when no agents are left.
+- **Activity:** after the `›`, each row shows the agent's latest tool call: Bash by its description, file tools by the file's name, searches by their pattern. A live row dims after 5 seconds without a status change or tool call, and brightens again on the next one.
+- **Finishing:** an agent that ends freezes its spinner in gray and shows **finished** in green, or **failed** or **stopped** in red, at full brightness for 8 seconds, then drops off. The band disappears when no agents are left.
 - **Toasts:** a toast tells you when an agent finishes, fails or is stopped, and stays up longer when one is waiting on you, for example at a permission prompt.
-- **Long names:** agent types get a fixed 16 columns so rows line up. A long `plugin:agent` name gives up its plugin name first (`acme-to…reviewer`, then `reviewer`), and only then is the agent name cut.
+- **Long names:** agent types get a fixed 16 columns and tasks 32, cut with `…`, so rows line up. A long `plugin:agent` name gives up its plugin name first (`acme-to…reviewer`, then `reviewer`), and only then is the agent name cut.
 
 ```
 /plugin install agent-spinners --marketplace wcampbell-dw/claude-plugins
 ```
 
-The spinners animate in the terminal and the desktop app; other surfaces show a static `●`. Claude Code's own subagent list still shows below the band.
+The spinners animate in the terminal and the desktop app; other surfaces show a static `●` (`○` once an agent has ended). Claude Code's own subagent list still shows below the band.
 
 ### statusline
 
