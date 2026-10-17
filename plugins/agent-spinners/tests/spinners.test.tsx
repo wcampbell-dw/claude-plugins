@@ -295,6 +295,58 @@ test("a row shows the agent's latest tool call beside its title", async ($, on) 
   await ui.unmount()
 })
 
+test('a narrow band shrinks the title, then the type, and drops the status so rows stay one line', async ($, on) => {
+  const clock = mock.clock(on)
+  const agents: AgentInfo[] = [
+    { id: 'a1', description: 'Scope the repo for the login bug', type: 'general-purpose', status: 'running' },
+  ]
+
+  on('agent.list', () => ({ value: agents }))
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('tool.call', () => ({ result: {} }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box key="engine" />
+  })
+
+  await $.agent.spawn({
+    tool_use_id: 't1',
+    prompt: 'go',
+    description: 'Scope the repo for the login bug',
+    subagentType: 'general-purpose',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: true,
+    fork: false,
+  })
+  await $.tool.call({ tool: 'Bash', command: 'npm test', description: 'Run the tests', agentId: 'a1' })
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const texts = async () => (await ui.findAll({ in: 'agent-spinners', type: 'Text' })).map(t => t.text)
+  const at = async (columns: number) => {
+    await ui.resize({ columns, rows: 3, in: 'agent-spinners' })
+    await ui.advance(80)
+    return texts()
+  }
+
+  // Wide: every column at full width, the status after them.
+  const wide = await at(100)
+  expect(wide.slice(1)).toEqual(['general-purpose  ', 'Scope the repo for the login bug', ' › ', 'Bash: Run the tests'])
+
+  // The title gives way first, and the status goes once it has no room.
+  const narrow = await at(40)
+  expect(narrow.slice(1)).toEqual(['general-purpose  ', 'Scope the repo for t…'])
+  expect(narrow.join('')).toHaveLength(40)
+
+  // Then the type column, down to its least.
+  const narrower = await at(20)
+  expect(narrower.slice(1)).toEqual(['general-… ', 'Scope t…'])
+  expect(narrower.join('')).toHaveLength(20)
+  await ui.unmount()
+})
+
 const BASH_BG = { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b1' }
 
 const notify = (blocks: string[]) => blocks.map(block => `<task-notification>\n${block}\n</task-notification>`).join('\n')
