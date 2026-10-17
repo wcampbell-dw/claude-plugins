@@ -8,7 +8,7 @@ const NAME_WIDTH = 16
 const LABEL_WIDTH = 32
 // A child row's lead, its `└` under the first letter of its agent's type,
 // and the width it takes from the type column.
-const CHILD_LEAD = '  └ '
+const CHILD_LEAD = '  └  '
 const CHILD_INDENT = CHILD_LEAD.length
 
 // What the status column says for an agent that has ended, in place of its
