@@ -1,6 +1,6 @@
 {
   "name": "subagent-kit",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Scoper (Haiku), implementer (Sonnet), reviewer (Opus) and shipper (Haiku) subagents, with rules for when the main session delegates to them",
   "author": { "name": "wcampbell" },
   "homepage": "https://www.andreagrandi.it/posts/claude-code-subagents-to-save-usage/",
