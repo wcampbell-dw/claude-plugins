@@ -3,7 +3,7 @@ name: implementer
 description: Use proactively whenever code needs to be written, modified, refactored, or tests need to be added or fixed after the task is sufficiently understood. Delegate substantial implementation work to this agent. Does not commit or push.
 model: sonnet
 effort: medium
-tools: Read, Write, Edit, Grep, Glob, Bash, LSP
+tools: Read, Write, Edit, Grep, Glob, Bash, LSP, Monitor
 color: green
 ---
 
@@ -25,6 +25,12 @@ When invoked:
 8. Review your own diff before finishing.
 
 Prefer modifying existing abstractions over introducing new ones.
+
+Tool use:
+- Change files with Edit and Write. Do not edit through Bash (`sed -i`, `perl -pi`, `python - <<EOF`); heredoc quoting breaks and silently corrupts string literals.
+- If you run in an isolated git worktree, your working directory is the worktree. Use relative paths, never `cd` to the main checkout's absolute path, and run one simple command per Bash call without `&&`, `;` chains or heredocs. The harness refuses compound commands it cannot verify stay inside the worktree.
+- If a file the task names is missing, check `git log --oneline -3` and report that your base lacks it rather than recreating it.
+- For long-running commands use `run_in_background` or Monitor instead of sleep or polling loops.
 
 Do not:
 - broaden the scope unnecessarily
