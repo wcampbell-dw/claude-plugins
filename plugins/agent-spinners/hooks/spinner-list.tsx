@@ -8,7 +8,7 @@ const NAME_WIDTH = 16
 const LABEL_WIDTH = 32
 // A child row's lead, its `└` under the first letter of its agent's type,
 // and the width it takes from the type column.
-const CHILD_LEAD = '  └ '
+const CHILD_LEAD = '  └  '
 const CHILD_INDENT = CHILD_LEAD.length
 
 // What the status column says for an agent that has ended, in place of its
@@ -18,6 +18,11 @@ const ENDED: Record<string, { text: string; color: string }> = {
   failed: { text: 'failed', color: 'error' },
   killed: { text: 'stopped', color: 'error' },
 }
+
+// Cuts `text` to `width` with a `…`, dropping any space the cut leaves before
+// it.
+const cut = (text: string, width: number) =>
+  text.length <= width ? text : `${text.slice(0, width - 1).trimEnd()}…`
 
 // The fewest characters of a plugin's name worth keeping before dropping it.
 const MIN_PLUGIN = 3
@@ -33,17 +38,15 @@ const shorten = (name: string, width: number) => {
   const agent = colon === -1 ? name : name.slice(colon + 1)
   const room = width - agent.length - 1
 
-  if (colon !== -1 && room >= MIN_PLUGIN) return `${name.slice(0, room)}…${agent}`
-  if (agent.length <= width) return agent
+  if (colon !== -1 && room >= MIN_PLUGIN) return `${name.slice(0, room).trimEnd()}…${agent}`
 
-  return `${agent.slice(0, width - 1)}…`
+  return cut(agent, width)
 }
 
 const fit = (name: string, width: number) => shorten(name, width).padEnd(width)
 
 // Fits the title to `width` so the status column lines up.
-const fitLabel = (label: string, width: number) =>
-  (label.length <= width ? label : `${label.slice(0, width - 1)}…`).padEnd(width)
+const fitLabel = (label: string, width: number) => cut(label, width).padEnd(width)
 
 // The spinner and its space, and the space after the type column.
 const MARK_WIDTH = 2
@@ -55,19 +58,24 @@ const MIN_NAME = 8
 const MIN_LABEL = 8
 const MIN_STATUS = 4
 
-type Layout = { name: number; label: number; status: boolean }
+// `status` is the room left for the status after its separator, 0 with too
+// little to show it.
+type Layout = { name: number; label: number; status: number }
 
 // Sizes the columns to the band's width so a row never wraps: the title gives
-// way first, then the type column, and the status shows only with room left.
-// Before the first layout (`columns` 0), the full widths.
+// way first, then the type column, and the status shows only with room left,
+// cut to that room so a long one can't push the row past the band's edge.
+// Before the first layout (`columns` 0), the full widths and an uncut status.
 const layout = (columns: number): Layout => {
-  if (columns <= 0) return { name: NAME_WIDTH, label: LABEL_WIDTH, status: true }
+  if (columns <= 0) return { name: NAME_WIDTH, label: LABEL_WIDTH, status: Infinity }
 
   const name = Math.max(MIN_NAME, Math.min(NAME_WIDTH, columns - MARK_WIDTH - GAP - MIN_LABEL))
   const label = Math.max(0, Math.min(LABEL_WIDTH, columns - MARK_WIDTH - GAP - name))
   const rest = columns - MARK_WIDTH - GAP - name - label
 
-  return { name, label, status: rest >= SEPARATOR.length + MIN_STATUS }
+  const status = rest - SEPARATOR.length
+
+  return { name, label, status: status >= MIN_STATUS ? status : 0 }
 }
 
 type State = { frame: number }
@@ -150,7 +158,7 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
             ) : null}
             {status ? (
               <Text color={status.color} dimColor={row.isQuiet} wrap="truncate-end">
-                {status.text}
+                {cut(status.text, widths.status)}
               </Text>
             ) : null}
           </Box>
