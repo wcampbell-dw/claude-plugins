@@ -347,6 +347,49 @@ test('a narrow band shrinks the title, then the type, and drops the status so ro
   await ui.unmount()
 })
 
+test('a status longer than the room left is cut so the other columns keep their width', async ($, on) => {
+  const clock = mock.clock(on)
+  const agents: AgentInfo[] = [{ id: 'a1', description: 'Push branch and open PR', type: 'shipper', status: 'running' }]
+
+  on('agent.list', () => ({ value: agents }))
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('tool.call', () => ({ result: {} }))
+  on('ui.render', { component: 'AbovePrompt' }, ($, e) => {
+    const { Box } = $.ui.resolve(e)
+
+    return <Box key="engine" />
+  })
+
+  await $.agent.spawn({
+    tool_use_id: 't1',
+    prompt: 'go',
+    description: 'Push branch and open PR',
+    subagentType: 'shipper',
+    provider: { plugin: 'engine', tier: 'core' },
+    parentModel: 'claude-opus-5-5',
+    background: true,
+    fork: false,
+  })
+  await $.tool.call({
+    tool: 'Bash',
+    command: 'gh pr create',
+    description: 'Write PR body file and open the pull request against main',
+    agentId: 'a1',
+  })
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  await ui.resize({ columns: 70, rows: 3, in: 'agent-spinners' })
+  await ui.advance(80)
+  const texts = (await ui.findAll({ in: 'agent-spinners', type: 'Text' })).map(t => t.text)
+
+  expect(texts[0]).toMatch(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] $/)
+  // The cut drops the space it would leave before the `…`.
+  expect(texts.slice(1)).toEqual(['shipper          ', 'Push branch and open PR         ', ' › ', 'Bash: Write PR…'])
+  expect(texts.join('')).toHaveLength(69)
+  await ui.unmount()
+})
+
 const BASH_BG = { stdout: '', stderr: '', interrupted: false, backgroundTaskId: 'b1' }
 
 const notify = (blocks: string[]) => blocks.map(block => `<task-notification>\n${block}\n</task-notification>`).join('\n')
@@ -418,7 +461,7 @@ test('a background command gets a top-level shell row until its notification', a
   await ui.unmount()
 })
 
-test('a monitor an agent started sits under that agent, its type fitted to 12 columns', async ($, on) => {
+test('a monitor an agent started sits under that agent, its type fitted to 11 columns', async ($, on) => {
   const clock = mock.clock(on)
   const agents: AgentInfo[] = [
     { id: 'a1', description: 'Fix the test', type: 'implementer', status: 'running' },
@@ -445,8 +488,8 @@ test('a monitor an agent started sits under that agent, its type fitted to 12 co
   const at = (re: RegExp) => texts.findIndex(t => re.test(t))
   expect(at(/Fix the test/)).toBeLessThan(at(/errors in deploy\.log/))
   expect(at(/errors in deploy\.log/)).toBeLessThan(at(/Other agent/))
-  expect(texts).toContain('  └ ')
-  expect(texts).toContain('monitor      ')
+  expect(texts).toContain('  └  ')
+  expect(texts).toContain('monitor     ')
   await ui.unmount()
 })
 
