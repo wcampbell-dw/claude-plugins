@@ -106,6 +106,8 @@ The rules (`plugins/subagent-kit/DELEGATION.md`) are added to the main session's
 
 `/subagent-kit:issue <number>` works a GitHub issue end to end with these agents. It assigns the issue to you, builds the change in its own worktree under `.claude/worktrees/`, opens a ready-for-review PR that closes the issue, then removes the worktree. Typing the command counts as permission to commit, push and open the PR. Running it again for the same issue picks up the existing branch, for example to address review comments. It needs the `gh` CLI, signed in.
 
+The session moves into the worktree with Claude Code's `EnterWorktree` tool, so its shells and subagents run there too. To have gitignored files such as `.env` copied into each new worktree, list them in a [`.worktreeinclude`](https://code.claude.com/docs/en/worktrees#copy-gitignored-files-into-worktrees) file at the repository root. `/subagent-kit:worktree-include` writes or updates one for you: it sorts the repository's gitignored files into local config and secrets to copy and regenerable output to leave out, checks what the project's setup actually reads, and dry-runs the result. Cleanup goes through `skills/issue/scripts/worktree.sh remove`, which removes the worktree and local branch only when nothing would be lost, and retries through Windows file locks.
+
 ```
 /plugin install subagent-kit --marketplace wcampbell-dw/claude-plugins
 ```

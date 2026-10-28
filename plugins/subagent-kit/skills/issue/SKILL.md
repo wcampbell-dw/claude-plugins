@@ -14,11 +14,14 @@ Typing this command is my explicit request to assign the issue to me, commit, pu
 1. Run `gh issue view $ARGUMENTS --json number,title,state,body,comments,labels,assignees`. Plain `--comments` can print nothing. If the issue is closed or the number is not an issue, stop.
 2. Assign the issue to me with `gh issue edit $ARGUMENTS --add-assignee @me`. This leaves any existing assignees in place. If it fails, report the error and carry on.
 3. From the main checkout, find the default branch with `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` and run `git fetch origin`.
-4. If a worktree or branch for this issue already exists (`git worktree list`, `git branch --list 'issue-$ARGUMENTS-*'`), reuse it and continue from its state. Otherwise create one:
-   `git worktree add .claude/worktrees/issue-$ARGUMENTS -b issue-$ARGUMENTS-<short-slug> origin/<default-branch>`
-5. Make sure `.claude/worktrees/` is ignored. If `git check-ignore -q .claude/worktrees` fails, append `.claude/worktrees/` to `.git/info/exclude` (local only, never commit it).
-6. Do all work inside the worktree. Subagents start in the main checkout, so give every `scoper`, `implementer` and `shipper` run the worktree's absolute path and tell it to work only there.
-7. Other `/issue` sessions may be running in sibling worktrees. Use absolute paths or `git -C <worktree>` instead of relative `cd`, and never touch another issue's worktree.
+4. Make sure `.claude/worktrees/` is ignored. If `git check-ignore -q .claude/worktrees` fails, append `.claude/worktrees/` to `.git/info/exclude` (local only, never commit it).
+5. Get into the issue's worktree with the `EnterWorktree` tool. It moves this session, its shells and its subagents into the worktree, and blocks commands aimed at the main checkout, so do everything the main checkout needs (steps 3 and 4) before this step. Take the first case that applies:
+   - The worktree `.claude/worktrees/issue-$ARGUMENTS` exists (`git worktree list`): call `EnterWorktree` with its `path`.
+   - A branch for the issue exists, locally (`git branch --list 'issue-$ARGUMENTS-*'`) or only on the remote (`git branch -r --list 'origin/issue-$ARGUMENTS-*'`): create the worktree on it with `git worktree add .claude/worktrees/issue-$ARGUMENTS <branch>` (for a remote-only branch, `git worktree add --track -b <branch> .claude/worktrees/issue-$ARGUMENTS origin/<branch>`). Then run `bash <this skill's base directory>/scripts/worktree.sh include .claude/worktrees/issue-$ARGUMENTS` to copy the gitignored files the repository lists in `.worktreeinclude`, and call `EnterWorktree` with the `path`. Continue from the branch's state.
+   - Otherwise call `EnterWorktree` with `name: "issue-$ARGUMENTS"`. Claude Code creates the worktree from `origin/<default-branch>` and copies the `.worktreeinclude` files itself. Rename its branch with `git branch -m issue-$ARGUMENTS-<short-slug>`. If `git rev-parse HEAD` does not match `origin/<default-branch>` (the user's `worktree.baseRef` setting can change the base), run `git reset --hard origin/<default-branch>`. The worktree is new, so this loses nothing.
+6. Gitignored files the build needs that `.worktreeinclude` does not cover, such as local settings or secrets, are not in the worktree. Copy the ones you need from the main checkout. If you had to copy any, mention in the final message that `/subagent-kit:worktree-include` can add them to `.worktreeinclude` so the next worktree gets them.
+7. Do all work inside the worktree. Still give every `scoper`, `implementer` and `shipper` run the worktree's absolute path and tell it to work only there. Run each command plainly from the worktree root: the isolation checks refuse `cd ... &&` chains.
+8. Other `/issue` sessions may be running in sibling worktrees. Never touch another issue's worktree.
 
 ## 2. Build it
 
@@ -35,13 +38,12 @@ Hand off to `shipper` with: the worktree path, the exact files, a commit message
 
 After the PR is open:
 
-1. Return to the main checkout. Never remove the worktree you are standing in.
-2. Stop anything you started from the worktree that may hold files open: `dotnet build-server shutdown`, and any local host, emulator or watcher you launched there.
-3. Run `git worktree remove .claude/worktrees/issue-$ARGUMENTS`. If it refuses because of uncommitted or untracked files, do not use `--force`. Report the files and leave the worktree.
-4. If it fails with "Permission denied" (a Windows file lock), run `git worktree prune`. If git no longer lists the worktree and the folder holds only ignored build output (`bin/`, `obj/` and the like), delete the folder. If anything else is left, report it and leave the folder.
-5. Run `git branch -d <branch>`. It is safe because the branch has been pushed. If git refuses, report it and leave the branch.
+1. Stop anything you started from the worktree that may hold files open: background shells, monitors, and any local host, emulator or watcher you launched there.
+2. Call `ExitWorktree` with `action: "keep"` to return to the main checkout. Do not use `"remove"`: it would ask to discard the branch's commits, and it does not handle Windows file locks.
+3. From the main checkout, run `bash <this skill's base directory>/scripts/worktree.sh remove .claude/worktrees/issue-$ARGUMENTS`. It removes the worktree only if it has no uncommitted or untracked files and its branch is pushed. It unlocks the worktree, shuts down .NET build servers, retries through Windows file locks, deletes leftover gitignored files once git has let go of the folder, and deletes the local branch.
+4. If it exits non-zero, it has kept what it could not safely remove and says why. Report that and leave it. Never fall back to `--force`, `-D` or deleting the folder by hand.
 
-The remote branch stays for the PR. To address review comments later, run `/issue $ARGUMENTS` again. Step 1.4 picks up the existing branch, and you can recreate the worktree from `origin/<branch>` if needed.
+The remote branch stays for the PR. To address review comments later, run `/issue $ARGUMENTS` again. Step 1.5 picks up the existing branch, from the remote if the local one is gone.
 
 ## When to stop
 
