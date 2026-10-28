@@ -1,7 +1,7 @@
 {
   "name": "agent-spinners",
-  "version": "0.4.4",
-  "description": "Band above the prompt listing subagents and background tasks (Bash commands, monitors) with braille spinners while they run",
+  "version": "0.4.5",
+  "description": "Band above the prompt listing subagents and background tasks (Bash and PowerShell commands, monitors) with braille spinners while they run",
   "author": { "name": "wcampbell" },
   "license": "MIT-0",
   "types": "./types/index.d.ts"
