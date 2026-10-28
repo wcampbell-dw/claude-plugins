@@ -25,7 +25,7 @@ Typing this command is my explicit request to assign the issue to me, commit, pu
 Follow DELEGATION.md for scoping, implementation, your own review and verification. In addition:
 
 - Run `reviewer` as well when the change touches security, concurrency, data migrations, a public API, or anything that could lose data.
-- Run the project's full relevant test suite and linters in the worktree before shipping.
+- Before shipping, make sure the project's full relevant test suite and linters have passed in the worktree on the final code. Run them only if the implementer did not, or if the code changed after its run.
 
 ## 3. Ship
 
