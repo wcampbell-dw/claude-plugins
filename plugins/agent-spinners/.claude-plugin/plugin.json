@@ -1,8 +1,16 @@
 {
   "name": "agent-spinners",
-  "version": "0.4.5",
+  "version": "0.5.0",
   "description": "Band above the prompt listing subagents and background tasks (Bash and PowerShell commands, monitors) with braille spinners while they run",
   "author": { "name": "wcampbell" },
   "license": "MIT-0",
-  "types": "./types/index.d.ts"
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "notifyWhenIdle": {
+      "type": "boolean",
+      "title": "Notify when idle",
+      "description": "Send a notification when Claude stops with no background tasks left running. On Windows Terminal, set Notifications to terminal_bell in /config to see it as a bell on the tab.",
+      "default": false
+    }
+  }
 }

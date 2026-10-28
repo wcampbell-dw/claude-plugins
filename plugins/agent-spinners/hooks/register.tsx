@@ -28,6 +28,8 @@ const LABEL_MAX = 120
 // How long past its timeout a monitor is given to say it ended before it is
 // taken to have.
 const DEADLINE_GRACE_MS = 5000
+// What the notification says when the main loop stops with nothing in flight.
+const IDLE_NOTICE = 'Claude is idle: no background tasks running'
 
 let timer: Timer | undefined
 let last = '[]'
@@ -291,7 +293,9 @@ async function reconcile($: Engine, inFlight: readonly { id: string }[] | undefi
   watch($)
 }
 
-export const register: Register = on => {
+export const register: Register = (on, options) => {
+  const notifyWhenIdle = options.notifyWhenIdle === true
+
   on('session.start', ($, e, next) => {
     watch($)
 
@@ -343,8 +347,15 @@ export const register: Register = on => {
   // in flight. Only observed.
   on('classic.Stop', async ($, e, next) => {
     await reconcile($, e.background_tasks)
+    const result = await next(e)
 
-    return next(e)
+    // Nothing left to wake the session, and no hook sending it back to work:
+    // Claude is waiting on you, not on a task.
+    if (notifyWhenIdle && e.background_tasks?.length === 0 && !result.block) {
+      $.ui.notify(IDLE_NOTICE).catch(() => {})
+    }
+
+    return result
   })
 
   on('classic.SubagentStop', async ($, e, next) => {
