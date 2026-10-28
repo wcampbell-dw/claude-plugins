@@ -40,7 +40,7 @@ After the PR is open:
 
 1. Stop anything you started from the worktree that may hold files open: background shells, monitors, and any local host, emulator or watcher you launched there.
 2. Call `ExitWorktree` with `action: "keep"` to return to the main checkout. Do not use `"remove"`: it would ask to discard the branch's commits, and it does not handle Windows file locks.
-3. From the main checkout, run `bash <this skill's base directory>/scripts/worktree.sh remove .claude/worktrees/issue-$ARGUMENTS`. It removes the worktree only if it has no uncommitted or untracked files and its branch is pushed. It unlocks the worktree, shuts down .NET build servers, retries through Windows file locks, deletes leftover gitignored files once git has let go of the folder, and deletes the local branch.
+3. From the main checkout, run `bash <this skill's base directory>/scripts/worktree.sh remove .claude/worktrees/issue-$ARGUMENTS`. It removes the worktree only if it has no uncommitted or untracked files and its branch is pushed. An untracked file identical to the main checkout's copy, such as the `.claude/settings.local.json` Claude Code copies in, doesn't count and is deleted. It unlocks the worktree, shuts down .NET build servers, retries through Windows file locks, deletes leftover gitignored files once git has let go of the folder, and deletes the local branch.
 4. If it exits non-zero, it has kept what it could not safely remove and says why. Report that and leave it. Never fall back to `--force`, `-D` or deleting the folder by hand.
 
 The remote branch stays for the PR. To address review comments later, run `/issue $ARGUMENTS` again. Step 1.5 picks up the existing branch, from the remote if the local one is gone.

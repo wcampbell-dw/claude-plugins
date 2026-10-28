@@ -91,9 +91,23 @@ remove() {
   [ -n "$wt_branch" ] || fail "worktree $arg has no branch (detached HEAD); cannot verify it was pushed, left in place"
   local branch=$wt_branch
 
-  # 3. Nothing uncommitted or untracked.
-  local dirty
-  dirty=$(git -C "$arg" status --porcelain) || fail "git status failed in $arg; worktree and branch '$branch' left in place"
+  # 3. Nothing uncommitted or untracked. An untracked file byte-identical to the same path in the
+  # main checkout is only a copy (Claude Code copies .claude/settings.local.json into worktrees
+  # it creates, and a .worktreeinclude copy is untracked wherever the ignore rule doesn't reach),
+  # so it doesn't block; it is deleted once nothing else does.
+  local dirty main file copies=() untracked=()
+  dirty=$(git -C "$arg" status --porcelain --untracked-files=no) \
+    || fail "git status failed in $arg; worktree and branch '$branch' left in place"
+  main=$(git worktree list --porcelain | sed -n '1s/^worktree //p')
+  while IFS= read -r -d '' file; do
+    if [ -n "$main" ] && [ ! -L "$arg/$file" ] && [ -f "$main/$file" ] && [ ! -L "$main/$file" ] \
+       && cmp -s "$arg/$file" "$main/$file"; then
+      copies+=("$file")
+    else
+      untracked+=("$file")
+    fi
+  done < <(git -C "$arg" ls-files -z --others --exclude-standard)
+  [ ${#untracked[@]} -eq 0 ] || dirty+=${dirty:+$'\n'}$(printf '?? %s\n' "${untracked[@]}")
   if [ -n "$dirty" ]; then
     printf '%s\n' "$dirty" >&2
     fail "worktree $arg has uncommitted or untracked files (listed above); worktree and branch '$branch' left in place"
@@ -109,21 +123,27 @@ remove() {
     git worktree unlock "$arg" || fail "could not unlock worktree $arg; worktree and branch '$branch' left in place"
   fi
 
-  # 6. Stop MSBuild/compiler servers that may hold files open.
+  # 6. Delete the copies step 3 let through; the main checkout still has each one.
+  for file in ${copies[@]+"${copies[@]}"}; do
+    rm -f "$arg/$file" || fail "could not delete $file, a copy of the main checkout's; worktree and branch '$branch' left in place"
+    echo "deleted $file (identical to the main checkout's copy)"
+  done
+
+  # 7. Stop MSBuild/compiler servers that may hold files open.
   if command -v dotnet >/dev/null 2>&1 \
      && [ -n "$(find "$arg" -maxdepth 4 \( -name node_modules -o -name bin -o -name obj \) -prune -o \
           \( -name '*.sln' -o -name '*.slnx' -o -name '*.csproj' \) -print -quit 2>/dev/null)" ]; then
     dotnet build-server shutdown >/dev/null 2>&1 || true
   fi
 
-  # 7. Remove the worktree (never --force); retry to ride out Windows file locks.
+  # 8. Remove the worktree (never --force); retry to ride out Windows file locks.
   local try err= removed=0
   for try in 1 2 3; do
     err=$(git worktree remove "$arg" 2>&1) && { removed=1; break; }
     [ $try -lt 3 ] && sleep "$RETRY_DELAY"
   done
 
-  # 8. Fallback: prune, then delete what is left. Step 3 guarantees it is only ignored files.
+  # 9. Fallback: prune, then delete what is left. Steps 3 and 6 guarantee it is only ignored files.
   if [ $removed -eq 0 ] || [ -e "$arg" ]; then
     git worktree prune
     find_worktree "$wt"
@@ -139,12 +159,12 @@ remove() {
     fi
   fi
 
-  # 9. Delete the local branch. -D is safe: step 4 found its commits on a remote branch, and
+  # 10. Delete the local branch. -D is safe: step 4 found its commits on a remote branch, and
   # -d would refuse when the upstream is still origin/main.
   err=$(git branch -D "$branch" 2>&1) \
     || fail "removed worktree $arg but could not delete branch '$branch': $err"
 
-  # 10.
+  # 11.
   echo "removed worktree $arg and deleted local branch '$branch'"
 }
 
