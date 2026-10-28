@@ -710,3 +710,58 @@ test('a prompt that is not a notification changes no task', async ($, on) => {
   expect((await drawn(ui)).join('')).not.toContain('finished')
   await ui.unmount()
 })
+
+// Records each notification sent, answering as a terminal bell would.
+function notifications(on: On) {
+  const sent: string[] = []
+  on('ui.notify', (_$, e) => {
+    sent.push(e.text)
+
+    return { value: { isSent: true, channel: 'terminal_bell' } }
+  })
+
+  return sent
+}
+
+test('notifies when the main loop stops with nothing in flight', { options: { notifyWhenIdle: true } }, async ($, on) => {
+  const clock = mock.clock(on)
+  setup(on, () => [])
+  const sent = notifications(on)
+  on('classic.Stop', () => ({}))
+
+  // Still waiting on a task: no notification.
+  await $.classic.Stop({
+    stop_hook_active: false,
+    background_tasks: [{ id: 'b1', type: 'shell', status: 'running', description: 'Run the tests' }],
+  })
+  // No list given: unknown, so no notification.
+  await $.classic.Stop({ stop_hook_active: false })
+  await clock.advance(500)
+  expect(sent).toEqual([])
+
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: [] })
+  await clock.advance(500)
+  expect(sent).toEqual(['Claude is idle: no background tasks running'])
+})
+
+test('a stop another hook blocks sends no notification', { options: { notifyWhenIdle: true } }, async ($, on) => {
+  const clock = mock.clock(on)
+  setup(on, () => [])
+  const sent = notifications(on)
+  on('classic.Stop', () => ({ block: 'keep going' }))
+
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: [] })
+  await clock.advance(500)
+  expect(sent).toEqual([])
+})
+
+test('sends no notification when the option is off', async ($, on) => {
+  const clock = mock.clock(on)
+  setup(on, () => [])
+  const sent = notifications(on)
+  on('classic.Stop', () => ({}))
+
+  await $.classic.Stop({ stop_hook_active: false, background_tasks: [] })
+  await clock.advance(500)
+  expect(sent).toEqual([])
+})
