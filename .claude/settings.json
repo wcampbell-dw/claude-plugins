@@ -1,0 +1,9 @@
+{
+  "enabledPlugins": {
+    "swap@wcampbell": false,
+    "statusline@wcampbell": false,
+    "agent-spinners@wcampbell": false,
+    "subagent-kit@wcampbell": false,
+    "shell-guard@wcampbell": false
+  }
+}
