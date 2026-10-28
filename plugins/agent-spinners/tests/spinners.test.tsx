@@ -633,6 +633,50 @@ test('a stop ends the tasks it no longer lists as in flight', async ($, on) => {
   await ui.unmount()
 })
 
+test("a subagent's command ends on the notification its conversation receives", async ($, on) => {
+  const clock = mock.clock(on)
+  const agents: AgentInfo[] = [{ id: 'a1', description: 'Fix the test', type: 'implementer', status: 'running' }]
+  setup(on, () => agents)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  let next = 0
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { ...BASH_BG, backgroundTaskId: `b${++next}` } }))
+  await spawn($, 'Fix the test')
+
+  await $.tool.call({ tool: 'Bash', command: 'npm test', description: 'Run the tests', run_in_background: true, agentId: 'a1' })
+  await $.tool.call({ tool: 'Bash', command: 'npm run dev', description: 'Serve the app', run_in_background: true, agentId: 'a1' })
+  await clock.advance(0)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const finished = async (label: string) =>
+    new RegExp(`shell\\s+${label}\\s+› finished`).test((await drawn(ui)).join(''))
+
+  const append = (
+    text: string,
+    row: Partial<{ type: 'attachment' | 'assistant'; door: 'queue' | 'tool-result'; agentId: string }> = {},
+  ) =>
+    $.session.append({
+      message: { type: row.type ?? 'attachment', role: row.type ?? 'user', content: [{ type: 'text', text }] },
+      door: row.door ?? 'queue',
+      origin: { kind: 'task-notification' },
+      uuid: `u${++next}`,
+      ...('agentId' in row ? (row.agentId ? { agentId: row.agentId } : {}) : { agentId: 'a1' }),
+    } as never)
+  const done = (id: string) => `<system-reminder>\n${notify([`<task-id>${id}</task-id>\n<status>completed</status>`])}\n</system-reminder>`
+
+  // The agent's own reply and a tool result that quote a notification end nothing.
+  await append(done('b1'), { type: 'assistant', door: 'queue' })
+  await append(done('b1'), { door: 'tool-result' })
+  await clock.advance(500)
+  expect(await finished('Run the tests')).toBe(false)
+
+  // The notification delivered to the agent ends its command while the agent runs on.
+  await append(done('b1'))
+  await clock.advance(500)
+  expect(await finished('Run the tests')).toBe(true)
+  expect(await finished('Serve the app')).toBe(false)
+  expect((await drawn(ui)).join('')).toContain('Fix the test')
+  await ui.unmount()
+})
+
 test('a prompt that is not a notification changes no task', async ($, on) => {
   const clock = mock.clock(on)
   setup(on, () => [])
