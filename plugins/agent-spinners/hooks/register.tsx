@@ -273,9 +273,8 @@ async function notified($: Engine, text: string) {
   watch($)
 }
 
-// Ends the tasks the engine no longer lists as in flight. A subagent's task
-// notifications go to that subagent, never through `prompt.submit` here, so
-// this is how its tasks are seen to end.
+// Ends the tasks the engine no longer lists as in flight: a fallback for a
+// task whose notification never reached `notified`.
 async function reconcile($: Engine, inFlight: readonly { id: string }[] | undefined) {
   if (!inFlight) return
 
@@ -321,6 +320,20 @@ export const register: Register = on => {
     if (e.origin.kind === 'task-notification') await notified($, e.text)
 
     return next(e)
+  })
+
+  // A subagent's task notifications go to that subagent, never through
+  // `prompt.submit`; each is a row of its conversation. Its own replies and
+  // tool results are skipped, so text that merely quotes a notification ends
+  // nothing. Only observed.
+  on('session.append', async ($, e, next) => {
+    const result = await next(e)
+    if (e.agentId && e.message.type !== 'assistant' && e.door !== 'tool-result') {
+      const text = e.message.content.map(block => (block.type === 'text' ? block.text : '')).join('\n')
+      await notified($, text)
+    }
+
+    return result
   })
 
   // Each stop of the main loop or a subagent lists the background work still
