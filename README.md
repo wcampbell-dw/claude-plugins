@@ -86,12 +86,14 @@ Four subagents that take work off the main session's model, and the rules for wh
 
 The rules (`plugins/subagent-kit/DELEGATION.md`) are added to the main session's system prompt, the way an `@` import in `~/.claude/CLAUDE.md` would add them. Subagents don't get them. The main session plans, reviews every diff the implementer returns and runs the tests, and the cheaper models do the reading, the editing and the git work.
 
+`/subagent-kit:issue <number>` works a GitHub issue end to end with these agents. It assigns the issue to you, builds the change in its own worktree under `.claude/worktrees/`, opens a ready-for-review PR that closes the issue, then removes the worktree. Typing the command counts as permission to commit, push and open the PR. Running it again for the same issue picks up the existing branch, for example to address review comments. It needs the `gh` CLI, signed in.
+
 ```
 /plugin install subagent-kit --marketplace wcampbell-dw/claude-plugins
 ```
 
 > [!NOTE]
-> If you already have agents named `scoper`, `implementer`, `reviewer` or `shipper` in `~/.claude/agents`, or delegation rules in your `CLAUDE.md`, remove them. Otherwise the main session sees both sets.
+> If you already have agents named `scoper`, `implementer`, `reviewer` or `shipper` in `~/.claude/agents`, or delegation rules in your `CLAUDE.md`, remove them. Otherwise the main session sees both sets. The same goes for an `issue` skill in `~/.claude/skills`.
 
 ### swap
 
