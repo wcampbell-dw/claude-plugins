@@ -5,6 +5,7 @@ A small collection of [Claude Code](https://claude.com/claude-code) plugins:
 | Plugin | What it does |
 | --- | --- |
 | [agent-spinners](#agent-spinners) | Live list of running subagents and background tasks above the prompt, with braille spinners and toasts when agents finish |
+| [shell-guard](#shell-guard) | On Windows, refuses Bash commands too long to arrive whole and `az` calls that cmd.exe would re-parse, installs `az` shims, and adds shell rules to the prompt |
 | [statusline](#statusline) | Three-line status line: directory and git, model and context, account and usage limits |
 | [subagent-kit](#subagent-kit) | Subagents on cheaper models for scoping, implementing, reviewing and shipping, with rules for when to use them |
 | [swap](#swap) | `/swap` slash command to switch Claude accounts with `cswap` |
@@ -73,6 +74,23 @@ To undo it, run `/statusline-uninstall`. It puts back the `statusLine` setting a
 
 **Needs:** a [Nerd Font](https://www.nerdfonts.com/) in your terminal, and `bash`, `jq` and `git` on your PATH (on Windows, Git Bash provides `bash`). It's built and tested on Windows under Git Bash. It sticks to plain bash, `jq` and `git`, so macOS and Linux should work, but they haven't been tested.
 
+### shell-guard
+
+On Windows, refuses Bash and PowerShell commands that would fail in ways the error doesn't explain, and tells Claude what to do instead:
+
+- **Long Bash commands.** Bash commands over about 7 KB arrive cut short and fail with `unexpected EOF while looking for matching`. Usually it's a big heredoc. shell-guard refuses Bash commands over 6,000 characters and points Claude to the Write tool.
+- **`az` and cmd.exe.** `az` is `az.cmd`, so cmd.exe re-parses its arguments and splits them at `&` and `|`. A URL loses its later parameters and a JMESPath or KQL query is cut, often with no error. Without the shims below, shell-guard refuses `az` calls that have `&` or `|` inside a quoted argument. With them, it only refuses an explicit `az.cmd`.
+
+```
+/plugin install shell-guard --marketplace wcampbell-dw/claude-plugins
+```
+
+Then run `/shell-guard-install` once on each machine. It copies two `az` shims, `az` for Git Bash and `az.ps1` for PowerShell, to `%USERPROFILE%\.local\bin`. The shims run the Azure CLI's own Python directly, so nothing goes through cmd.exe, and they make `az` work in Git Bash, where only `az.cmd` is found otherwise. The command also checks that `.local\bin` comes before the Azure CLI's `bin` folder on PATH, and says what to change if it doesn't. After an install, each session start copies the shims again whenever the plugin's versions differ, so updates reach them. `/shell-guard-uninstall` deletes the shims and stops the copying.
+
+shell-guard also adds a short set of Windows shell rules to the system prompt of any session or subagent that has Bash or PowerShell: write files with the Write tool and change them with Edit, how the PowerShell tool reports exit codes, function names that don't collide with built-in aliases, keeping `Remove-Item` in its own call, each shell's own quoting, waiting with Monitor, and plain commands in worktree sessions. The rules are in `plugins/shell-guard/RULES.md`.
+
+The plugin does nothing outside Windows.
+
 ### subagent-kit
 
 Four subagents that take work off the main session's model, and the rules for when the main session hands work to them. Based on Andrea Grandi's [Using Claude Code subagents to save usage](https://www.andreagrandi.it/posts/claude-code-subagents-to-save-usage/).
@@ -107,7 +125,7 @@ The rules (`plugins/subagent-kit/DELEGATION.md`) are added to the main session's
 
 ## Requirements
 
-agent-spinners and statusline are built on Claude Code's plugin hooks API, which is in early access, so they need a recent Claude Code. They were developed against version 2.1.296. swap is a plain slash command and works on any version with plugin support.
+agent-spinners, shell-guard, statusline and subagent-kit are built on Claude Code's plugin hooks API, which is in early access, so they need a recent Claude Code. They were developed against version 2.1.296. swap is a plain slash command and works on any version with plugin support.
 
 ## Issues
 

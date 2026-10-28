@@ -1,0 +1,7 @@
+{
+  "name": "shell-guard",
+  "version": "0.1.0",
+  "description": "Refuses Bash and PowerShell commands that break on Windows, installs az shims that skip cmd.exe, and adds Windows shell rules to the system prompt",
+  "author": { "name": "wcampbell" },
+  "license": "MIT-0"
+}

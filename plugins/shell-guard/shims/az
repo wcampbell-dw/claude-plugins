@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Runs the Azure CLI's own Python directly instead of az.cmd, so cmd.exe never re-parses
+# & | < > ^ in the arguments. Put this file in a folder that comes before the Azure CLI's
+# bin folder on PATH, such as ~/.local/bin.
+for python in \
+  "$(cygpath -u "$LOCALAPPDATA")/azure-cli/python.exe" \
+  "$(cygpath -u "$PROGRAMFILES")/Microsoft SDKs/Azure/CLI2/python.exe" \
+  "$(cygpath -u "${PROGRAMFILES} (x86)")/Microsoft SDKs/Azure/CLI2/python.exe"; do
+  if [ -x "$python" ]; then
+    case "$python" in */azure-cli/*) export AZ_INSTALLER=ZIP ;; *) export AZ_INSTALLER=MSI ;; esac
+    exec "$python" -IBm azure.cli "$@"
+  fi
+done
+echo "az shim: no Azure CLI python.exe found" >&2
+exit 1
