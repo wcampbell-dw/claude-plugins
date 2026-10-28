@@ -197,13 +197,16 @@ type Call = {
   shell_id?: string
 }
 
+// The tools that run a command, and can leave it running in the background.
+const SHELLS = new Set(['Bash', 'PowerShell'])
+
 // Notes a task a call started, or marks one a call stopped.
 async function track($: Engine, e: Call, output: unknown) {
   const out = (output ?? {}) as Record<string, unknown>
   const now = await $.clock.now()
   let started: TaskRecord | undefined
 
-  if (e.tool === 'Bash' && typeof out.backgroundTaskId === 'string') {
+  if (SHELLS.has(e.tool) && typeof out.backgroundTaskId === 'string') {
     started = {
       id: out.backgroundTaskId,
       kind: 'shell',

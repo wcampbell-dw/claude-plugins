@@ -461,6 +461,25 @@ test('a background command gets a top-level shell row until its notification', a
   await ui.unmount()
 })
 
+test('a background PowerShell command gets a shell row too', async ($, on) => {
+  const clock = mock.clock(on)
+  setup(on, () => [])
+  on('tool.call', { tool: 'PowerShell' }, () => ({ result: { ...BASH_BG, backgroundTaskId: 'p1' } }))
+
+  await $.tool.call({ tool: 'PowerShell', command: 'Start-Sleep 30', description: 'Wait on the build', run_in_background: true })
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const text = async () => (await drawn(ui)).join('')
+  expect(await text()).toContain('shell ')
+  expect(await text()).toContain('Wait on the build')
+
+  await submit($, notify(['<task-id>p1</task-id>\n<status>completed</status>']))
+  await clock.advance(500)
+  expect(await text()).toContain('finished')
+  await ui.unmount()
+})
+
 test('a monitor an agent started sits under that agent, its type fitted to 11 columns', async ($, on) => {
   const clock = mock.clock(on)
   const agents: AgentInfo[] = [
