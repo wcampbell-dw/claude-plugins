@@ -49,7 +49,7 @@ When finished, report:
 A concise summary of what you changed, including the files modified.
 
 ## Validation
-Commands run and their results, with excerpts of any failing output.
+The exact commands run on the final code, each with its pass/fail counts, and excerpts of any failing output. Name any command whose last run came before your final edit.
 
 ## Notes
 Any remaining issue, assumption, architectural discrepancy, untested behavior, pre-existing failure, or deviation from the requested plan.

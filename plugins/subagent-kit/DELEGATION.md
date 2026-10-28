@@ -38,7 +38,8 @@ Do these yourself:
 - Decide scope, architecture, and implementation strategy.
 - Perform branch setup and other git operations. Delegate commits, pushes and pull requests to `subagent-kit:shipper` as described above.
 - Review every implementation returned by the implementer.
-- Run the full relevant test suite and any broader validation that the implementer did not run.
+- Run the validation the implementer did not run: broader suites, integration or end-to-end checks, and targeted checks where the diff raises doubts. Do not re-run a command the implementer reported passing unless the code it covers has changed since that run.
+- Start a run you expect to take more than a few minutes with `run_in_background` and keep reviewing while it runs. Wait for its completion notification instead of polling the output file.
 - Perform the final end-to-end check on the real surface when applicable.
 - Decide whether the task is actually complete.
 
