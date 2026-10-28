@@ -1,12 +1,17 @@
 {
   "name": "wcampbell",
-  "description": "Claude Code plugins: live subagent spinners, a Nerd Font status line, account switching, and cost-saving subagents",
+  "description": "Claude Code plugins: live subagent spinners, a Nerd Font status line, account switching, cost-saving subagents, and a Windows shell guard",
   "owner": { "name": "wcampbell" },
   "plugins": [
     {
       "name": "statusline",
       "source": "./plugins/statusline",
       "description": "Three-line Nerd Font status line: cwd and git, model and context, account and usage"
+    },
+    {
+      "name": "shell-guard",
+      "source": "./plugins/shell-guard",
+      "description": "On Windows, refuses Bash commands too long to arrive whole and az calls that cmd.exe would re-parse, installs az shims, and adds Windows shell rules to the prompt"
     },
     {
       "name": "swap",
