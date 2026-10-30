@@ -4,12 +4,9 @@ import type { AgentRow } from '../types'
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const FRAME_MS = 80
-const NAME_WIDTH = 16
-const LABEL_WIDTH = 32
-// A child row's lead, its `└` under the first letter of its agent's type,
-// and the width it takes from the type column.
+// A child row's lead, its `└` under the first letter of its agent's type.
 const CHILD_LEAD = '  └  '
-const CHILD_INDENT = CHILD_LEAD.length
+const SEPARATOR = ' › '
 
 // What the status column says for an agent that has ended, in place of its
 // last tool call.
@@ -19,68 +16,77 @@ const ENDED: Record<string, { text: string; color: string }> = {
   killed: { text: 'stopped', color: 'error' },
 }
 
-// Cuts `text` to `width` with a `…`, dropping any space the cut leaves before
-// it.
-const cut = (text: string, width: number) =>
-  text.length <= width ? text : `${text.slice(0, width - 1).trimEnd()}…`
+// A plugin's agent (`plugin:agent`) goes by its own name; a task's kind has no
+// plugin and stays as is.
+const agentName = (type: string) => type.slice(type.indexOf(':') + 1)
 
-// The fewest characters of a plugin's name worth keeping before dropping it.
-const MIN_PLUGIN = 3
+const segmenter = new Intl.Segmenter()
 
-// Plugins whose agents always go by their own name, without the plugin's.
-const BARE_PLUGINS = ['subagent-kit']
+// Characters drawn two cells wide: East Asian Wide and Fullwidth, and emoji.
+const WIDE =
+  /[ᄀ-ᅟ⺀-〾ぁ-㏿㐀-䶿一-꓏ꥠ-꥿가-힣豈-﫿︰-﹯＀-｠￠-￦]|\p{Extended_Pictographic}|\p{Emoji_Presentation}|[\u{20000}-\u{3fffd}]/u
 
-// Fits the agent type (or a task's kind) to `width` so the columns line up.
-// A plugin's agent (`plugin:agent`) gives up its plugin name first:
-// `mattpoc…research`, then `research`, and only then is the agent's own name
-// cut: `rese…`. A `BARE_PLUGINS` agent shows as `implementer` from the start.
-const shorten = (name: string, width: number) => {
-  const bare = BARE_PLUGINS.find(plugin => name.startsWith(`${plugin}:`))
-  if (bare) name = name.slice(bare.length + 1)
-  if (name.length <= width) return name
+// Characters that take no cell of their own: marks, the joiner, and variation
+// selectors.
+const ZERO = /[\p{M}​-‍︀-️]/u
 
-  const colon = name.indexOf(':')
-  const agent = colon === -1 ? name : name.slice(colon + 1)
-  const room = width - agent.length - 1
+// The terminal cells one grapheme takes.
+const cells = (grapheme: string) => {
+  if (WIDE.test(grapheme)) return 2
 
-  if (colon !== -1 && room >= MIN_PLUGIN) return `${name.slice(0, room).trimEnd()}…${agent}`
-
-  return cut(agent, width)
+  return [...grapheme].filter(char => !ZERO.test(char)).length
 }
 
-const fit = (name: string, width: number) => shorten(name, width).padEnd(width)
+const width = (text: string) => {
+  let total = 0
+  for (const { segment } of segmenter.segment(text)) total += cells(segment)
 
-// Fits the title to `width` so the status column lines up.
-const fitLabel = (label: string, width: number) => cut(label, width).padEnd(width)
+  return total
+}
 
-// The spinner and its space, and the space after the type column.
-const MARK_WIDTH = 2
-const GAP = 1
-const SEPARATOR = ' › '
-// The narrowest the type column and title get before the next one gives way,
-// and the least of a status worth drawing.
-const MIN_NAME = 8
-const MIN_LABEL = 8
-const MIN_STATUS = 4
+// The start of `text` that fits `room` cells, never splitting a grapheme.
+const head = (text: string, room: number) => {
+  let out = ''
+  for (const { segment } of segmenter.segment(text)) {
+    room -= cells(segment)
+    if (room < 0) break
+    out += segment
+  }
 
-// `status` is the room left for the status after its separator, 0 with too
-// little to show it.
-type Layout = { name: number; label: number; status: number }
+  return out
+}
 
-// Sizes the columns to the band's width so a row never wraps: the title gives
-// way first, then the type column, and the status shows only with room left,
-// cut to that room so a long one can't push the row past the band's edge.
-// Before the first layout (`columns` 0), the full widths and an uncut status.
-const layout = (columns: number): Layout => {
-  if (columns <= 0) return { name: NAME_WIDTH, label: LABEL_WIDTH, status: Infinity }
+// One run of a row. A `fixed` run is never cut, a `sep` run is cut whole or
+// not at all.
+type Part = { text: string; color?: string; dim?: boolean; fixed?: boolean; sep?: boolean }
 
-  const name = Math.max(MIN_NAME, Math.min(NAME_WIDTH, columns - MARK_WIDTH - GAP - MIN_LABEL))
-  const label = Math.max(0, Math.min(LABEL_WIDTH, columns - MARK_WIDTH - GAP - name))
-  const rest = columns - MARK_WIDTH - GAP - name - label
+// Cuts the row once at the band's edge with a `…` as its last cell, so the
+// status goes first, then the title, then the type. The cut drops any space it
+// would leave before the `…`, and a separator with nothing after it. Before the
+// first layout (`columns` 0), nothing is cut.
+const fitRow = (parts: Part[], columns: number) => {
+  if (columns <= 0 || parts.reduce((total, part) => total + width(part.text), 0) <= columns) return parts
 
-  const status = rest - SEPARATOR.length
+  let room = columns - 1
+  const kept: Part[] = []
+  for (const part of parts) {
+    const size = width(part.text)
+    if (part.fixed || size <= room) {
+      kept.push(part)
+      room -= size
+      continue
+    }
 
-  return { name, label, status: status >= MIN_STATUS ? status : 0 }
+    kept.push({ ...part, text: part.sep ? '' : head(part.text, room) })
+    break
+  }
+
+  while (kept.length > 1 && (kept.at(-1)!.sep || kept.at(-1)!.text === '')) kept.pop()
+
+  const last = kept.at(-1)!
+  kept[kept.length - 1] = { ...last, text: `${last.text.trimEnd()}…` }
+
+  return kept
 }
 
 type State = { frame: number }
@@ -120,7 +126,6 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
 
   const frame = surface.state?.frame ?? 0
   const { Box, Text } = surface.elements
-  const widths = layout(surface.columns)
 
   const ids = new Set(props.rows.map(row => row.id))
   for (const id of shownFrame.keys()) {
@@ -132,40 +137,27 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
       {props.rows.map(row => {
         const { mark, color } = glyph(row, frame)
         const ended = ENDED[row.status]
-        const status = widths.status
-          ? (ended ?? (row.activity ? { text: row.activity, color: undefined } : undefined))
-          : undefined
+        const status = ended ?? (row.activity ? { text: row.activity, color: undefined } : undefined)
+
+        const parts: Part[] = []
+        if (row.isChild) parts.push({ text: CHILD_LEAD, dim: true, fixed: true })
+        parts.push({ text: `${mark} `, color, fixed: true })
+        parts.push({ text: `${agentName(row.type)} `, dim: true })
+        if (row.label) parts.push({ text: row.label, dim: row.isQuiet })
+        if (status) {
+          parts.push({ text: SEPARATOR, dim: true, sep: true })
+          parts.push({ text: status.text, color: status.color, dim: row.isQuiet })
+        }
 
         // Every run truncates rather than wraps, should the band still be
-        // narrower than the columns at their least.
+        // narrower than the row's fixed lead and spinner.
         return (
           <Box key={row.id}>
-            {row.isChild ? (
-              <Text dimColor wrap="truncate-end">
-                {CHILD_LEAD}
+            {fitRow(parts, surface.columns).map((part, i) => (
+              <Text key={i} color={part.color} dimColor={part.dim} wrap="truncate-end">
+                {part.text}
               </Text>
-            ) : null}
-            <Text color={color} wrap="truncate-end">
-              {`${mark} `}
-            </Text>
-            <Text dimColor wrap="truncate-end">
-              {`${fit(row.type, row.isChild ? widths.name - CHILD_INDENT : widths.name)} `}
-            </Text>
-            {widths.label > 0 ? (
-              <Text dimColor={row.isQuiet} wrap="truncate-end">
-                {fitLabel(row.label, widths.label)}
-              </Text>
-            ) : null}
-            {status ? (
-              <Text dimColor wrap="truncate-end">
-                {SEPARATOR}
-              </Text>
-            ) : null}
-            {status ? (
-              <Text color={status.color} dimColor={row.isQuiet} wrap="truncate-end">
-                {cut(status.text, widths.status)}
-              </Text>
-            ) : null}
+            ))}
           </Box>
         )
       })}
