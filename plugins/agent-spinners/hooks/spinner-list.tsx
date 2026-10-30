@@ -27,11 +27,16 @@ const cut = (text: string, width: number) =>
 // The fewest characters of a plugin's name worth keeping before dropping it.
 const MIN_PLUGIN = 3
 
+// Plugins whose agents always go by their own name, without the plugin's.
+const BARE_PLUGINS = ['subagent-kit']
+
 // Fits the agent type (or a task's kind) to `width` so the columns line up.
 // A plugin's agent (`plugin:agent`) gives up its plugin name first:
 // `mattpoc…research`, then `research`, and only then is the agent's own name
-// cut: `rese…`.
+// cut: `rese…`. A `BARE_PLUGINS` agent shows as `implementer` from the start.
 const shorten = (name: string, width: number) => {
+  const bare = BARE_PLUGINS.find(plugin => name.startsWith(`${plugin}:`))
+  if (bare) name = name.slice(bare.length + 1)
   if (name.length <= width) return name
 
   const colon = name.indexOf(':')
