@@ -83,6 +83,8 @@ test('long names give up the plugin name before the agent name', async ($, on) =
   const names: [string, string][] = [
     ['general-purpose', 'general-purpose '],
     ['mattpocock-skills:research', 'mattpoc…research'],
+    ['subagent-kit:implementer', 'implementer     '],
+    ['subagent-kit:sc', 'sc              '],
     ['pluginname:research-x', 'plugi…research-x'],
     ['plugin:researcher-x1', 'researcher-x1   '],
     ['pluginname:researcher-x12', 'researcher-x12  '],
