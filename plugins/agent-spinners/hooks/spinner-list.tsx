@@ -105,7 +105,9 @@ const glyph = (row: AgentRow, frame: number) => {
     case 'running':
       // Colors are theme keys, so they follow the person's theme: under an
       // ANSI theme, an agent in the terminal's magenta (the statusline's model
-      // color), a task in its cyan.
+      // color), a task in its cyan. A color name won't do instead: the plugin
+      // API draws one as a fixed hex (`magenta` as #d6409f), not the
+      // terminal's own.
       return spin(row, frame, row.kind === 'agent' ? 'merged' : 'planMode')
     case 'pending':
     case 'waiting':
@@ -142,7 +144,7 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
         const parts: Part[] = []
         if (row.isChild) parts.push({ text: CHILD_LEAD, dim: true, fixed: true })
         parts.push({ text: `${mark} `, color, fixed: true })
-        parts.push({ text: `${agentName(row.type)} `, dim: true })
+        parts.push({ text: `${agentName(row.type)} `, color })
         if (row.label) parts.push({ text: row.label, dim: row.isQuiet })
         if (status) {
           parts.push({ text: SEPARATOR, dim: true, sep: true })
