@@ -44,8 +44,8 @@ test('running agents spin, then tick and drop off', async ($, on) => {
   expect((await ui.find({ in: 'agent-spinners', text: /Scope the repo/ }))).toBeDefined()
   expect((await ui.find({ in: 'agent-spinners', text: '⠋ ' }))).toBeDefined()
 
-  // The type leads, padded to a fixed column; a long one is cut with an ellipsis.
-  expect(await ui.find({ in: 'agent-spinners', type: 'Text', text: 'scoper           ' })).toBeDefined()
+  // The type leads, with its one space and no padding.
+  expect(await ui.find({ in: 'agent-spinners', type: 'Text', text: 'scoper ' })).toBeDefined()
 
   await ui.advance(80)
   expect((await ui.find({ in: 'agent-spinners', text: '⠙ ' }))).toBeDefined()
@@ -78,18 +78,16 @@ test('running agents spin, then tick and drop off', async ($, on) => {
   await ui.unmount()
 })
 
-test('long names give up the plugin name before the agent name', async ($, on) => {
+test('a plugin agent shows by its own name', async ($, on) => {
   const clock = mock.clock(on)
   const names: [string, string][] = [
-    ['general-purpose', 'general-purpose '],
-    ['mattpocock-skills:research', 'mattpoc…research'],
-    ['subagent-kit:implementer', 'implementer     '],
-    ['subagent-kit:sc', 'sc              '],
-    ['pluginname:research-x', 'plugi…research-x'],
-    ['plugin:researcher-x1', 'researcher-x1   '],
-    ['pluginname:researcher-x12', 'researcher-x12  '],
-    ['lab:an-extremely-long-agent', 'an-extremely-lo…'],
-    ['an-extremely-long-builtin', 'an-extremely-lo…'],
+    ['general-purpose', 'general-purpose'],
+    ['mattpocock-skills:research', 'research'],
+    ['subagent-kit:implementer', 'implementer'],
+    ['subagent-kit:sc', 'sc'],
+    ['pluginname:research-x', 'research-x'],
+    ['lab:an-extremely-long-agent', 'an-extremely-long-agent'],
+    ['an-extremely-long-builtin', 'an-extremely-long-builtin'],
   ]
   const agents: AgentInfo[] = names.map(([type], i) => ({
     id: `a${i}`,
@@ -251,7 +249,7 @@ test("a row shows the agent's latest tool call beside its title", async ($, on) 
   await clock.advance(0)
 
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  // The row past the spinner and the type, its padding squeezed.
+  // The row past the spinner and the type.
   const row = async () =>
     (await ui.findAll({ in: 'agent-spinners', type: 'Text' }))
       .slice(2)
@@ -260,9 +258,9 @@ test("a row shows the agent's latest tool call beside its title", async ($, on) 
       .replace(/\s+/g, ' ')
       .trim()
 
-  // Nothing called yet: the title alone, padded to a fixed column.
+  // Nothing called yet: the title alone, unpadded.
   expect(await row()).toBe('Scope the repo')
-  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: /Scope the repo/ }))?.text).toHaveLength(32)
+  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: /Scope the repo/ }))?.text).toBe('Scope the repo')
 
   // Bash goes by its description, a file by its name, an MCP tool by its own name.
   await $.tool.call({ tool: 'Bash', command: 'npm test', description: 'Run the tests', agentId: 'a1' })
@@ -297,7 +295,7 @@ test("a row shows the agent's latest tool call beside its title", async ($, on) 
   await ui.unmount()
 })
 
-test('a narrow band shrinks the title, then the type, and drops the status so rows stay one line', async ($, on) => {
+test('a narrow band cuts the row once at its edge, the status first, then the title, then the type', async ($, on) => {
   const clock = mock.clock(on)
   const agents: AgentInfo[] = [
     { id: 'a1', description: 'Scope the repo for the login bug', type: 'general-purpose', status: 'running' },
@@ -333,23 +331,39 @@ test('a narrow band shrinks the title, then the type, and drops the status so ro
     return texts()
   }
 
-  // Wide: every column at full width, the status after them.
+  // Wide: the whole row, packed with no padding.
   const wide = await at(100)
-  expect(wide.slice(1)).toEqual(['general-purpose  ', 'Scope the repo for the login bug', ' › ', 'Bash: Run the tests'])
+  expect(wide.slice(1)).toEqual(['general-purpose ', 'Scope the repo for the login bug', ' › ', 'Bash: Run the tests'])
+  expect(wide.join('')).toHaveLength(72)
 
-  // The title gives way first, and the status goes once it has no room.
-  const narrow = await at(40)
-  expect(narrow.slice(1)).toEqual(['general-purpose  ', 'Scope the repo for t…'])
-  expect(narrow.join('')).toHaveLength(40)
+  // The status goes first, cut to the room left.
+  const status = await at(61)
+  expect(status.slice(1)).toEqual(['general-purpose ', 'Scope the repo for the login bug', ' › ', 'Bash: R…'])
+  expect(status.join('')).toHaveLength(61)
 
-  // Then the type column, down to its least.
-  const narrower = await at(20)
-  expect(narrower.slice(1)).toEqual(['general-… ', 'Scope t…'])
-  expect(narrower.join('')).toHaveLength(20)
+  // The cut drops the space it would leave before the `…`.
+  expect((await at(60)).slice(4)).toEqual(['Bash:…'])
+
+  // Cut in the separator, the line ends cleanly after the title.
+  for (const columns of [52, 53, 54]) {
+    const texts = await at(columns)
+    expect(texts.slice(1)).toEqual(['general-purpose ', 'Scope the repo for the login bug…'])
+  }
+  expect((await at(55)).slice(3)).toEqual([' › ', 'B…'])
+
+  // Then the title, with no separator drawn.
+  const label = await at(30)
+  expect(label.slice(1)).toEqual(['general-purpose ', 'Scope the r…'])
+  expect(label.join('')).toHaveLength(30)
+
+  // Then the type.
+  const type = await at(10)
+  expect(type.slice(1)).toEqual(['general…'])
+  expect(type.join('')).toHaveLength(10)
   await ui.unmount()
 })
 
-test('a status longer than the room left is cut so the other columns keep their width', async ($, on) => {
+test('a status longer than the room left is cut at the band edge, the title kept', async ($, on) => {
   const clock = mock.clock(on)
   const agents: AgentInfo[] = [{ id: 'a1', description: 'Push branch and open PR', type: 'shipper', status: 'running' }]
 
@@ -387,8 +401,44 @@ test('a status longer than the room left is cut so the other columns keep their 
 
   expect(texts[0]).toMatch(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] $/)
   // The cut drops the space it would leave before the `…`.
-  expect(texts.slice(1)).toEqual(['shipper          ', 'Push branch and open PR         ', ' › ', 'Bash: Write PR…'])
-  expect(texts.join('')).toHaveLength(69)
+  expect(texts.slice(1)).toEqual(['shipper ', 'Push branch and open PR', ' › ', 'Bash: Write PR body file and open…'])
+  expect(texts.join('')).toHaveLength(70)
+  await ui.unmount()
+})
+
+test('wide characters count two cells and a cut never splits one', async ($, on) => {
+  const clock = mock.clock(on)
+  const agents: AgentInfo[] = [
+    { id: 'a1', description: '日本語のタイトル', type: 'scoper', status: 'running' },
+    { id: 'a2', description: 'ab👍🏽cd', type: 'scoper', status: 'running' },
+  ]
+  setup(on, () => agents)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  await spawn($, '日本語のタイトル')
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const at = async (columns: number) => {
+    await ui.resize({ columns, rows: 3, in: 'agent-spinners' })
+    await ui.advance(80)
+    return drawn(ui)
+  }
+  const cjk = (texts: string[]) => texts.find(t => t.startsWith('日'))
+
+  // Whole at 25 cells: 2 + 7 + 8 CJK characters of 2 cells each.
+  expect(cjk(await at(25))).toBe('日本語のタイトル')
+
+  // Five characters make 10 cells; the `…` is the 20th.
+  expect(cjk(await at(20))).toBe('日本語のタ…')
+
+  // A sixth wouldn't fit in the 9 cells left, so the cut stops before it.
+  expect(cjk(await at(19))).toBe('日本語の…')
+
+  // 3 cells of room: one CJK character fits; the emoji with its skin tone is
+  // one grapheme of 2 cells, so 'ab' stops before it.
+  const narrow = await at(13)
+  expect(cjk(narrow)).toBe('日…')
+  expect(narrow.find(t => t.startsWith('ab'))).toBe('ab…')
   await ui.unmount()
 })
 
@@ -482,7 +532,7 @@ test('a background PowerShell command gets a shell row too', async ($, on) => {
   await ui.unmount()
 })
 
-test('a monitor an agent started sits under that agent, its type fitted to 11 columns', async ($, on) => {
+test('a monitor an agent started sits under that agent', async ($, on) => {
   const clock = mock.clock(on)
   const agents: AgentInfo[] = [
     { id: 'a1', description: 'Fix the test', type: 'implementer', status: 'running' },
@@ -510,7 +560,7 @@ test('a monitor an agent started sits under that agent, its type fitted to 11 co
   expect(at(/Fix the test/)).toBeLessThan(at(/errors in deploy\.log/))
   expect(at(/errors in deploy\.log/)).toBeLessThan(at(/Other agent/))
   expect(texts).toContain('  └  ')
-  expect(texts).toContain('monitor     ')
+  expect(texts).toContain('monitor ')
   await ui.unmount()
 })
 
