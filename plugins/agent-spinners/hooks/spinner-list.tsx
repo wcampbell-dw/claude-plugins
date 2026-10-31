@@ -7,6 +7,10 @@ const FRAME_MS = 80
 // A child row's lead, its `└` under the first letter of its agent's type.
 const CHILD_LEAD = '  └  '
 const SEPARATOR = ' › '
+// The type name's glint: how many graphemes it lights, and how many steps it
+// spends off the word between sweeps.
+const GLINT = 3
+const GLINT_REST = 10
 
 // What the status column says for an agent that has ended, in place of its
 // last tool call.
@@ -58,7 +62,7 @@ const head = (text: string, room: number) => {
 
 // One run of a row. A `fixed` run is never cut, a `sep` run is cut whole or
 // not at all.
-type Part = { text: string; color?: string; dim?: boolean; fixed?: boolean; sep?: boolean }
+type Part = { text: string; color?: string; dim?: boolean; fixed?: boolean; sep?: boolean; bold?: boolean; glint?: number }
 
 // Cuts the row once at the band's edge with a `…` as its last cell, so the
 // status goes first, then the title, then the type. The cut drops any space it
@@ -89,6 +93,28 @@ const fitRow = (parts: Part[], columns: number) => {
   return kept
 }
 
+// A part with a glint drawn as runs: in its color, with a bold window (bright,
+// under an ANSI theme) sweeping across it right to left, one grapheme per step,
+// then resting off the word. Step 0
+// has the window just short of the word, so the word starts whole.
+const shimmer = (part: Part): Part[] => {
+  if (part.glint === undefined) return [part]
+
+  const graphemes = [...segmenter.segment(part.text)].map(({ segment }) => segment)
+  const swept = (part.glint % (graphemes.length + GLINT + GLINT_REST - 1)) - GLINT
+  const start = graphemes.length - GLINT - swept
+  const run = (from: number, to: number, lit: boolean): Part => ({
+    text: graphemes.slice(Math.max(from, 0), Math.max(to, 0)).join(''),
+    color: part.color,
+    // Never dim: `dimColor` draws the theme's gray in place of the color.
+    ...(lit ? { bold: true } : {}),
+  })
+
+  return [run(0, start, false), run(start, start + GLINT, true), run(start + GLINT, graphemes.length, false)].filter(
+    run => run.text !== '',
+  )
+}
+
 type State = { frame: number }
 
 // The spinner frame each row last drew, so an idle row can hold it.
@@ -97,7 +123,7 @@ const shownFrame = new Map<string, number>()
 const spin = (row: AgentRow, index: number, color: string) => {
   shownFrame.set(row.id, index)
 
-  return { mark: FRAMES[index % FRAMES.length], color }
+  return { mark: FRAMES[index % FRAMES.length], color, step: index }
 }
 
 const glyph = (row: AgentRow, frame: number) => {
@@ -115,7 +141,7 @@ const glyph = (row: AgentRow, frame: number) => {
       return spin(row, Math.floor(frame / 3), 'warning')
     default:
       // Idle or ended: frozen on the frame it stopped at.
-      return { mark: FRAMES[(shownFrame.get(row.id) ?? 0) % FRAMES.length], color: 'inactive' }
+      return { mark: FRAMES[(shownFrame.get(row.id) ?? 0) % FRAMES.length], color: 'inactive', step: undefined }
   }
 }
 
@@ -137,14 +163,15 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
   return (
     <Box flexDirection="column">
       {props.rows.map(row => {
-        const { mark, color } = glyph(row, frame)
+        const { mark, color, step } = glyph(row, frame)
         const ended = ENDED[row.status]
         const status = ended ?? (row.activity ? { text: row.activity, color: undefined } : undefined)
 
         const parts: Part[] = []
         if (row.isChild) parts.push({ text: CHILD_LEAD, dim: true, fixed: true })
         parts.push({ text: `${mark} `, color, fixed: true })
-        parts.push({ text: `${agentName(row.type)} `, color })
+        // The type glints on the spinner's clock while it spins.
+        parts.push({ text: `${agentName(row.type)} `, color, glint: step })
         if (row.label) parts.push({ text: row.label, dim: row.isQuiet })
         if (status) {
           parts.push({ text: SEPARATOR, dim: true, sep: true })
@@ -155,8 +182,8 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
         // narrower than the row's fixed lead and spinner.
         return (
           <Box key={row.id}>
-            {fitRow(parts, surface.columns).map((part, i) => (
-              <Text key={i} color={part.color} dimColor={part.dim} wrap="truncate-end">
+            {fitRow(parts, surface.columns).flatMap(shimmer).map((part, i) => (
+              <Text key={i} color={part.color} bold={part.bold} dimColor={part.dim} wrap="truncate-end">
                 {part.text}
               </Text>
             ))}

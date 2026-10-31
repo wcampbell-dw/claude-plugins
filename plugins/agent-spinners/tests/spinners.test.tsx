@@ -171,6 +171,65 @@ test('an idle agent holds its last frame in gray', async ($, on) => {
   await ui.unmount()
 })
 
+test("a spinning row's type glints, and a still one's doesn't", async ($, on) => {
+  const clock = mock.clock(on)
+  let agents: AgentInfo[] = [{ id: 'a1', description: 'Scope', type: 'scoper', status: 'running' }]
+  setup(on, () => agents)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('ui.toast', () => ({ value: undefined }))
+  const COLORS: Record<string, string> = { running: 'merged', waiting: 'warning', idle: 'inactive' }
+  await spawn($, 'Scope')
+  await clock.advance(0)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  // The type's runs, each marked `*` when lit.
+  const type = async () =>
+    (await ui.findAll({ in: 'agent-spinners', type: 'Text' }))
+      .slice(1, -1)
+      .map(t => {
+        expect(t.props.color).toBe(COLORS[agents[0]!.status])
+        return t.props.bold ? `*${t.text}*` : t.text
+      })
+
+  // Whole and in full color at first, then lit three graphemes at a time, one step per
+  // frame from the right, the space after the name included.
+  expect(await type()).toEqual(['scoper '])
+  expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'scoper ' }))?.props.dimColor).toBeFalsy()
+  await ui.advance(80)
+  expect(await type()).toEqual(['scoper', '* *'])
+  await ui.advance(160)
+  expect(await type()).toEqual(['scop', '*er *'])
+  await ui.advance(80)
+  expect(await type()).toEqual(['sco', '*per*', ' '])
+  await ui.advance(320)
+  expect(await type()).toEqual(['*sc*', 'oper '])
+
+  // It rests off the word, then sweeps again: 7 graphemes and 10 steps of rest.
+  await ui.advance(160)
+  expect(await type()).toEqual(['scoper '])
+  await ui.advance(80 * 10)
+  expect(await type()).toEqual(['scoper', '* *'])
+
+  // Waiting, it steps at a third of the pace, like its spinner.
+  agents = [{ ...agents[0]!, status: 'waiting' }]
+  await clock.advance(500)
+  const seen: string[] = []
+  for (let i = 0; i < 9; i++) {
+    await ui.advance(80)
+    seen.push((await type()).join('|'))
+  }
+  expect(seen.filter((runs, i) => i > 0 && runs !== seen[i - 1])).toHaveLength(2)
+
+  // Idle, it's whole, gray and unlit.
+  agents = [{ ...agents[0]!, status: 'idle' }]
+  await clock.advance(500)
+  for (let i = 0; i < 5; i++) {
+    await ui.advance(80)
+    expect(await type()).toEqual(['scoper '])
+  }
+  await ui.unmount()
+})
+
 test('a toast says when agents finish or need attention', async ($, on) => {
   const clock = mock.clock(on)
   const toasts: { text: string; timeoutMs?: number }[] = []
@@ -324,42 +383,34 @@ test('a narrow band cuts the row once at its edge, the status first, then the ti
   await clock.advance(0)
 
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
-  const texts = async () => (await ui.findAll({ in: 'agent-spinners', type: 'Text' })).map(t => t.text)
+  // The row after its spinner, as one line: the type's glint splits it into
+  // runs.
   const at = async (columns: number) => {
     await ui.resize({ columns, rows: 3, in: 'agent-spinners' })
     await ui.advance(80)
-    return texts()
+    return (await drawn(ui)).slice(1).join('')
   }
 
   // Wide: the whole row, packed with no padding.
-  const wide = await at(100)
-  expect(wide.slice(1)).toEqual(['general-purpose ', 'Scope the repo for the login bug', ' › ', 'Bash: Run the tests'])
-  expect(wide.join('')).toHaveLength(72)
+  expect(await at(100)).toBe('general-purpose Scope the repo for the login bug › Bash: Run the tests')
 
   // The status goes first, cut to the room left.
-  const status = await at(61)
-  expect(status.slice(1)).toEqual(['general-purpose ', 'Scope the repo for the login bug', ' › ', 'Bash: R…'])
-  expect(status.join('')).toHaveLength(61)
+  expect(await at(61)).toBe('general-purpose Scope the repo for the login bug › Bash: R…')
 
   // The cut drops the space it would leave before the `…`.
-  expect((await at(60)).slice(4)).toEqual(['Bash:…'])
+  expect(await at(60)).toBe('general-purpose Scope the repo for the login bug › Bash:…')
 
   // Cut in the separator, the line ends cleanly after the title.
   for (const columns of [52, 53, 54]) {
-    const texts = await at(columns)
-    expect(texts.slice(1)).toEqual(['general-purpose ', 'Scope the repo for the login bug…'])
+    expect(await at(columns)).toBe('general-purpose Scope the repo for the login bug…')
   }
-  expect((await at(55)).slice(3)).toEqual([' › ', 'B…'])
+  expect(await at(55)).toBe('general-purpose Scope the repo for the login bug › B…')
 
   // Then the title, with no separator drawn.
-  const label = await at(30)
-  expect(label.slice(1)).toEqual(['general-purpose ', 'Scope the r…'])
-  expect(label.join('')).toHaveLength(30)
+  expect(await at(30)).toBe('general-purpose Scope the r…')
 
   // Then the type.
-  const type = await at(10)
-  expect(type.slice(1)).toEqual(['general…'])
-  expect(type.join('')).toHaveLength(10)
+  expect(await at(10)).toBe('general…')
   await ui.unmount()
 })
 
@@ -397,11 +448,11 @@ test('a status longer than the room left is cut at the band edge, the title kept
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   await ui.resize({ columns: 70, rows: 3, in: 'agent-spinners' })
   await ui.advance(80)
-  const texts = (await ui.findAll({ in: 'agent-spinners', type: 'Text' })).map(t => t.text)
+  const texts = await drawn(ui)
 
   expect(texts[0]).toMatch(/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏] $/)
   // The cut drops the space it would leave before the `…`.
-  expect(texts.slice(1)).toEqual(['shipper ', 'Push branch and open PR', ' › ', 'Bash: Write PR body file and open…'])
+  expect(texts.slice(1).join('')).toBe('shipper Push branch and open PR › Bash: Write PR body file and open…')
   expect(texts.join('')).toHaveLength(70)
   await ui.unmount()
 })
