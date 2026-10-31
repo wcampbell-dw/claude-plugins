@@ -73,7 +73,18 @@ Do not duplicate the entire implementation merely to verify it. Review proportio
 
 When re-reviewing after fixes (including repeat `/code-review` runs on the same PR), review only the commits since the last review, not the whole change again. If a second round finds new defects in the same module, stop fixing piecemeal and tell me it looks like a design problem; propose an ADR or a grilling session instead of another fix round.
 
-This review in the main session is the only default review. Do not also run the `subagent-kit:reviewer` agent or other review agents and skills on the same change. Use `subagent-kit:reviewer` only when I ask for it, or when the change falls under the risky categories listed in Escalation.
+## Independent review with the reviewer agent
+
+- Run the `subagent-kit:reviewer` agent on every change headed for a commit or PR, in addition to your own review. Skip it only for trivial changes: docs or comment wording, formatting, or a one-line change whose effect you can see in full.
+- Start it with `run_in_background` once the diff is ready, and do your own review while it runs. Give it the request or issue, the agreed plan, and how to see the diff (for example `git diff main...HEAD`).
+- Treat its findings as input. Check each one against the code before acting on it, and say which ones you rejected and why.
+- Pick the model and effort for each run from the change, overriding the agent's default of Sonnet at `high`:
+  - Keep the default for ordinary features, bug fixes, refactors and test changes.
+  - Pass `effort: "medium"` for a small, mechanical change: a rename, a config or dependency bump, or a diff of a few dozen lines in one file.
+  - Pass `model: "opus"` for a change in the Escalation categories below, or one that could lose data. Add `effort: "xhigh"` for security-sensitive or concurrency changes.
+  - Pass `model: "opus"` when I ask for a thorough or deep review, and follow any model or effort I name.
+- After fixes, continue the same reviewer with `SendMessage` and point it at the commits since its last review, at the same model and effort.
+- Do not also run other review agents or skills, such as `/code-review`, on the same change unless I ask.
 
 ## Escalation
 

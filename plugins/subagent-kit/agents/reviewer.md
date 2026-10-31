@@ -1,8 +1,8 @@
 ---
 name: reviewer
-description: Independent read-only code review of a change. Use only when the user asks for a review or the change is risky (security, concurrency, migrations, public APIs, data loss). Give it the plan/intent and how to see the diff.
-model: opus
-effort: medium
+description: Independent read-only code review of a change. Run it on every non-trivial change before it ships, alongside the main session's own review. Give it the plan/intent and how to see the diff.
+model: sonnet
+effort: high
 tools: Read, Grep, Glob, Bash, LSP
 color: red
 ---
