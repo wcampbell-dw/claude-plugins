@@ -20,7 +20,7 @@ Typing this command is my explicit request to assign the issue to me, commit, pu
    - A branch for the issue exists, locally (`git branch --list 'issue-$ARGUMENTS-*'`) or only on the remote (`git branch -r --list 'origin/issue-$ARGUMENTS-*'`): create the worktree on it with `git worktree add .claude/worktrees/issue-$ARGUMENTS <branch>` (for a remote-only branch, `git worktree add --track -b <branch> .claude/worktrees/issue-$ARGUMENTS origin/<branch>`). Then run `bash <this skill's base directory>/scripts/worktree.sh include .claude/worktrees/issue-$ARGUMENTS` to copy the gitignored files the repository lists in `.worktreeinclude`, and call `EnterWorktree` with the `path`. Continue from the branch's state.
    - Otherwise call `EnterWorktree` with `name: "issue-$ARGUMENTS"`. Claude Code creates the worktree from `origin/<default-branch>` and copies the `.worktreeinclude` files itself. Rename its branch with `git branch -m issue-$ARGUMENTS-<short-slug>`. If `git rev-parse HEAD` does not match `origin/<default-branch>` (the user's `worktree.baseRef` setting can change the base), run `git reset --hard origin/<default-branch>`. The worktree is new, so this loses nothing.
 6. Gitignored files the build needs that `.worktreeinclude` does not cover, such as local settings or secrets, are not in the worktree. Copy the ones you need from the main checkout. If you had to copy any, mention in the final message that `/subagent-kit:worktree-include` can add them to `.worktreeinclude` so the next worktree gets them.
-7. Do all work inside the worktree. Still give every `scoper`, `implementer` and `shipper` run the worktree's absolute path and tell it to work only there. Run each command plainly from the worktree root: the isolation checks refuse `cd ... &&` chains.
+7. Do all work inside the worktree. Still give every `scoper`, `implementer` and `shipper` run the worktree's absolute path and tell it to work only there. The `shipper` can't change directory, so it checks that its git runs in that worktree and stops if not. Run each command plainly from the worktree root: the isolation checks refuse `cd ... &&` chains.
 8. Other `/issue` sessions may be running in sibling worktrees. Never touch another issue's worktree.
 
 ## 2. Build it
@@ -32,7 +32,7 @@ Follow DELEGATION.md for scoping, implementation, your own review and verificati
 
 ## 3. Ship
 
-Hand off to `shipper` with: the worktree path, the exact files, a commit message that matches the style of `git log --oneline -20`, and the steps commit, push, and open a ready-for-review PR. Write the PR body yourself: summary, what was verified, and `Closes #$ARGUMENTS`.
+Hand off to `shipper` with: the worktree path, the exact files, the PR title, and the steps commit, push, and open a ready-for-review PR. The shipper can't write files, so write two files in your scratchpad and give it their paths: the commit message, matching the style of `git log --oneline -20`, and the PR body, with a summary, what was verified, and `Closes #$ARGUMENTS`.
 
 ## 4. Clean up
 

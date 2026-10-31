@@ -24,7 +24,9 @@ This is a standing request to use subagents. Do not wait for me to ask.
 ## Ship with the shipper agent
 
 - When I ask you to commit, push or open a pull request, hand the git and GitHub steps to the `subagent-kit:shipper` agent once your review and verification are done.
-- Tell it exactly which steps I asked for, which files belong to the change, the commit message, the issue number if there is one, and the verification you ran. It does not run tests and does not edit files.
+- Tell it exactly which steps I asked for, which files belong to the change, the issue number if there is one, and the verification you ran. It does not run tests and does not edit files.
+- A hook limits its Bash to a fixed set of `git` and `gh pr` commands, so it can't write files. Write the commit message, and the PR body when it opens a PR, to files in your scratchpad, and give it their paths and the PR title. Fill in `.github/pull_request_template.md` yourself if the repository has one. Leave out attribution lines, because it stops on them.
+- It runs git in your working directory and can't change it. Changes in an implementer's isolated worktree must be merged into your checkout before it can ship them.
 - If it stops on a pre-flight problem such as an unrelated file or a missing changelog entry, fix the problem yourself and run it again.
 - Do small git operations yourself when a handoff would cost more, such as a single follow-up commit on an open PR.
 - Print the pull request link it returns in your final response.
