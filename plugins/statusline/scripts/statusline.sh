@@ -120,7 +120,7 @@ usage_segment() {
   local p=${4%.*} col b="" at rem out
   color_for col "$p" 50 80
   [ "$7" != nobar ] && { bar b "$p" "$col"; b+=" "; }
-  out="${CYAN}$2${RST} ${GRAY}$3${RST} ${b}${col}${BOLD}${p}${NOBOLD}%${RST}"
+  out="${CYAN}$2 ${RST}${GRAY}$3${RST} ${b}${col}${BOLD}${p}${NOBOLD}%${RST}"
   if [ -n "$5" ]; then
     printf -v at "$6" "$5"
     at=${at#0}; at=${at/ 0/ }   # 03:30pm -> 3:30pm, Mon 03pm -> Mon 3pm
@@ -241,7 +241,7 @@ if [ -n "$ctx" ]; then
   color_for col "$c" 15 25
   bar b "$c" "$col"
   tokens used "$ctx_tok"
-  line2+="${SEP}${CYAN}${I_CTX}${RST} ${b} ${col}${BOLD}${c}${NOBOLD}%${RST} ${GRAY}${used}"
+  line2+="${SEP}${CYAN}${I_CTX} ${RST}${b} ${col}${BOLD}${c}${NOBOLD}%${RST} ${GRAY}${used}"
   (( ctx_size > 0 )) && { tokens size "$ctx_size"; line2+="/${size}"; }
   line2+="${RST}"
 fi
