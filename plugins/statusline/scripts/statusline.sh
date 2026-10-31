@@ -6,7 +6,7 @@
 # Process launches cost ~100ms+ each under Git Bash, so everything except jq and
 # git status uses bash builtins, and helpers assign to variables instead of $(...).
 # Claude Code cancels a run that is still going when the next update arrives, so slow work
-# (git status, the account lookup, the usage logger) is cached or skipped where possible.
+# (git status, the account lookup) is cached or skipped where possible.
 export LC_ALL=C.UTF-8    # so ${#s} counts characters, not bytes
 IFS= read -rd '' input   # builtin; $(cat) would cost another process launch
 
@@ -28,19 +28,7 @@ eval "$(jq -rb '@sh "
   five_reset=\(.rate_limits.five_hour.resets_at // "")
   week=\(.rate_limits.seven_day.used_percentage // "")
   week_reset=\(.rate_limits.seven_day.resets_at // "")
-  usage_key=\([.rate_limits.five_hour, .rate_limits.seven_day] | map(.used_percentage, .resets_at) | join("|"))
 "' <<<"$input")"
-
-# Feed the subagent-kit usage logger, only when the rate-limit numbers changed since it last
-# finished. The marker is written after the logger succeeds, so a cancelled run is retried.
-logger=~/.claude/subagent-kit/statusline.sh
-seen="$cache_dir/usage-seen"
-if [ -f "$logger" ] && [ -n "${usage_key//|/}" ]; then
-  last_key=""; [ -f "$seen" ] && IFS= read -r last_key < "$seen"
-  if [ "$usage_key" != "$last_key" ]; then
-    { bash "$logger" <<<"$input" >/dev/null 2>&1 && printf '%s\n' "$usage_key" > "$seen"; } &
-  fi
-fi
 
 # Colors come from the terminal's own 16-color palette, so the theme decides the actual shades.
 E=$'\e'
