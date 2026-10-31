@@ -102,7 +102,7 @@ Four subagents that take work off the main session's model, and the rules for wh
 | `subagent-kit:scoper` | Haiku | Read-only. Gathers the goal, acceptance criteria, relevant files and tests before planning |
 | `subagent-kit:implementer` | Sonnet | Writes code and tests for a task already planned. Does not commit |
 | `subagent-kit:reviewer` | Sonnet (Opus for risky changes) | Read-only. Independent review of every non-trivial change before it ships |
-| `subagent-kit:shipper` | Haiku | Commits, pushes and opens pull requests, only the steps you asked for |
+| `subagent-kit:shipper` | Haiku | Commits, pushes and opens pull requests, only the steps you asked for. A hook limits its Bash to a fixed set of `git` and `gh pr` commands |
 
 The rules (`plugins/subagent-kit/DELEGATION.md`) are added to the main session's system prompt, the way an `@` import in `~/.claude/CLAUDE.md` would add them. Subagents don't get them. The main session plans, reviews every diff the implementer returns and runs the tests, and the cheaper models do the reading, the editing and the git work.
 
