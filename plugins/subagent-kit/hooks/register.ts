@@ -28,6 +28,7 @@ const DENY = (why: string) =>
   '  gh pr create --title <t> --body-file <file> [--base <b>] [--head <b>] [--draft]\n' +
   '  gh pr edit [<n>] [--title <t>] [--body-file <file>] [--base <b>]\n' +
   '  gh pr view [<n>] [--json <fields>] [--jq <expr>]\n' +
+  '  gh stack link [--open] <pr-number> <pr-number> [<pr-number>...]\n' +
   "Put paths with backslashes or spaces, and titles, in single quotes; write an apostrophe as \\'. " +
   'If you need anything else, stop and report.'
 
@@ -67,6 +68,8 @@ type Shape = {
   required?: string[]
   pattern?: RegExp
   operands?: RegExp[]
+  // Matches every operand past the ones `operands` lists.
+  rest?: RegExp
   paths?: boolean
 }
 
@@ -102,7 +105,7 @@ const judgeShape = (shape: Shape, args: string[]): string | undefined => {
       seen.add(name)
       continue
     }
-    const operand = shape.operands?.[operands++]
+    const operand = shape.operands?.[operands++] ?? shape.rest
     if (arg.startsWith('-') || !operand?.test(arg)) return `\`${arg}\` is not allowed here`
   }
   const missing = shape.required?.find(flag => !seen.has(flag))
@@ -139,6 +142,12 @@ const GH_PR: Record<string, Shape> = {
   view: { values: ['--json', '--jq'], operands: [REF] },
 }
 
+// PR numbers only: given a branch, `gh stack link` pushes it to a remote it picks itself and
+// opens a PR with a generated body. No --remote or --base, for the same reasons.
+const GH_STACK: Record<string, Shape> = {
+  link: { flags: ['--open'], rest: /^[1-9][0-9]*$/ },
+}
+
 // Why the shipper may not run this command, or undefined when it may.
 export const judgeShipperCommand = (command: string): string | undefined => {
   const words = splitWords(command)
@@ -151,6 +160,10 @@ export const judgeShipperCommand = (command: string): string | undefined => {
   if (program === 'gh' && args[0] === 'pr') {
     const shape = Object.hasOwn(GH_PR, args[1] ?? '') ? GH_PR[args[1]] : undefined
     return shape ? judgeShape(shape, args.slice(2)) : `\`gh pr ${args[1] ?? ''}\` is not one of them`
+  }
+  if (program === 'gh' && args[0] === 'stack') {
+    const shape = Object.hasOwn(GH_STACK, args[1] ?? '') ? GH_STACK[args[1]] : undefined
+    return shape ? judgeShape(shape, args.slice(2)) : `\`gh stack ${args[1] ?? ''}\` is not one of them`
   }
   return `\`${[program, args[0]].filter(Boolean).join(' ')}\` is not one of them`
 }

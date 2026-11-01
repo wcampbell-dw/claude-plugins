@@ -2,6 +2,7 @@
 # Worktree helper for the /subagent-kit:issue skill. Run it from the main checkout.
 #   worktree.sh include <worktree-path>   copy gitignored files listed in .worktreeinclude
 #   worktree.sh remove  <worktree-path>   remove a finished, pushed worktree and its local branch
+#   worktree.sh branch  <branch>          delete a pushed local branch no worktree has checked out
 # Claude Code applies .worktreeinclude only to worktrees it creates itself; `include` covers
 # worktrees made with plain `git worktree add`.
 set -u
@@ -9,7 +10,7 @@ set -u
 RETRY_DELAY=${WORKTREE_RETRY_DELAY:-2}   # seconds between retries (Windows file locks)
 
 usage() {
-  echo "usage: ${0##*/} include|remove <worktree-path>" >&2
+  echo "usage: ${0##*/} include|remove <worktree-path>, or ${0##*/} branch <branch>" >&2
   exit 2
 }
 
@@ -168,9 +169,21 @@ remove() {
   echo "removed worktree $arg and deleted local branch '$branch'"
 }
 
+# Deletes a local branch the way `remove` step 10 does, for the lower branches of an /issue
+# queue: `remove` deletes only the branch its worktree has checked out.
+branch() {
+  local name=$1 err
+  git show-ref --verify --quiet "refs/heads/$name" || { echo "no local branch '$name'; nothing to do"; return 0; }
+  git worktree list --porcelain | grep -qxF "branch refs/heads/$name"     && fail "branch '$name' is checked out in a worktree; left in place"
+  [ -n "$(git for-each-ref --contains "refs/heads/$name" --count=1 refs/remotes)" ]     || fail "branch '$name' has commits on no remote branch (unpushed); left in place"
+  err=$(git branch -D "$name" 2>&1) || fail "could not delete branch '$name': $err"
+  echo "deleted local branch '$name'"
+}
+
 [ $# -eq 2 ] || usage
 case $1 in
   include) include "$2" ;;
   remove) remove "$2" ;;
+  branch) branch "$2" ;;
   *) usage ;;
 esac

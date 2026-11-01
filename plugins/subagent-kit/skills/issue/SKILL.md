@@ -1,13 +1,17 @@
 ---
 name: issue
-description: Work a GitHub issue end to end in its own worktree, open a ready-for-review PR, then remove the worktree.
+description: Work a GitHub issue end to end in its own worktree, open a ready-for-review PR, then remove the worktree. Several issues queue up as a stack of PRs, one per issue, linked with gh-stack.
 disable-model-invocation: true
-argument-hint: <issue-number>
+argument-hint: <issue-number> [<issue-number>...]
 ---
 
-Work on GitHub issue #$ARGUMENTS from start to a ready-for-review pull request.
+Arguments: `$ARGUMENTS`
 
-Typing this command is my explicit request to assign the issue to me, commit, push and open a ready-for-review PR (not a draft) for this issue. Do not ask before doing those steps. Stop and ask only for the cases listed under "When to stop".
+With one issue number, work that issue from start to a ready-for-review pull request, following sections 1 to 4 with `$ARGUMENTS` as the number.
+
+With several, they are a queue: follow "Queue" at the end of this file. It works them in the order given, one at a time, and ships them as a stack of PRs, each based on the one before.
+
+Typing this command is my explicit request to assign the issues to me, commit, push and open ready-for-review PRs (not drafts) for them, and for a queue to link those PRs into a stack. Do not ask before doing those steps. Stop and ask only for the cases listed under "When to stop".
 
 ## 1. Set up
 
@@ -53,7 +57,44 @@ Stop and ask me only when:
 - the real scope is much larger than the issue describes, or needs an architectural decision I should make
 - verification still fails after a reasonable fix attempt. A test run that was killed or interrupted, for example by low memory or a timeout, has not failed: rerun it once (alone, or in smaller pieces if memory was the cause) before stopping.
 - shipper stops on a pre-flight problem you cannot fix yourself
+- a queued issue's existing branch is not based on the previous issue's branch (see "Queue")
 
 ## Final message
 
-Give the PR link, one line on what was verified, and anything left behind (a kept worktree or branch and why).
+Give the PR link, one line on what was verified, and anything left behind (a kept worktree or branch and why). For a queue, list every issue with its PR link in stack order, the stack link if `gh stack link` printed one, and any issues not reached.
+
+## Queue
+
+A queue of issues becomes a stack: issue 1's PR targets the default branch, issue 2's branch starts from issue 1's and its PR targets issue 1's branch, and so on. Below, "the previous branch" means the branch of the issue just before in the queue, and `<first>` the first issue number.
+
+### Set up once
+
+1. Check `gh stack --version`. If it fails, stop and tell me to run `gh extension install github/gh-stack`.
+2. Run section 1, steps 1 and 2, for every issue in the queue before starting any work. If any is closed or not an issue, stop before building anything and say which.
+3. Run section 1, steps 3, 4 and 6 to 8 as written. For step 5, the whole queue shares one worktree, `.claude/worktrees/stack-<first>`, and moves from branch to branch inside it. Its cases become:
+   - The worktree exists: call `EnterWorktree` with its `path`.
+   - The first issue's branch exists (locally or on the remote): create the worktree on it as section 1, step 5 says, under the `stack-<first>` path, copy the `.worktreeinclude` files, and enter it.
+   - Otherwise call `EnterWorktree` with `name: "stack-<first>"` and rename and check its branch as section 1, step 5 says, naming it `issue-<first>-<short-slug>`.
+
+### Each issue, in order
+
+1. Get onto the issue's branch inside the worktree. The first issue's branch is set up already. For each later issue:
+   - If a branch `issue-<n>-*` exists, locally or on the remote, switch to it (`git switch <branch>`, or `git switch --track -c <branch> origin/<branch>`) and check it contains the previous branch with `git merge-base --is-ancestor <previous-branch> HEAD`. If it does not, stop and ask: rebasing it would rewrite pushed history.
+   - Otherwise create it from the previous branch's tip with `git switch -c issue-<n>-<short-slug>`.
+2. Build it as section 2 says, scoped to this issue alone. The previous issues' changes are already in the branch: the scoper, implementer and reviewer should treat them as existing code. Give the reviewer the diff against the previous branch (`git diff <previous-branch>...HEAD`), not against the default branch.
+3. Ship it as section 3 says, with `Closes #<n>` in the body. The shipper opens the PR with `--base <previous-branch>`, or `--base <default-branch>` for the first issue. If the branch already has an open PR (`gh pr view --json url,baseRefName`), have the shipper commit and push only, and fix a wrong base with `gh pr edit --base`.
+4. Note the PR number, then go on to the next issue without cleaning up.
+
+If an issue hits a "When to stop" case, stop the queue there: later issues would stack on it. Link and clean up what shipped (below), then ask.
+
+### Link the stack
+
+Once two or more PRs in the queue are open, hand the shipper `gh stack link --open <pr-1> <pr-2> ...` with the PR numbers in queue order, bottom first. It creates the stack on GitHub, or extends one that already holds some of them. If it fails, for example because stacked PRs are not enabled for the repository, report its output: the PRs still chain through their bases, so they can be linked later.
+
+### Clean up once
+
+Follow section 4 with the `stack-<first>` worktree. `worktree.sh remove` deletes only the branch the worktree has checked out, the queue's last one. Then, from the main checkout, run `bash <this skill's base directory>/scripts/worktree.sh branch <branch>` for each earlier branch in the queue. Like `remove`, it deletes a branch only once its commits are on a remote branch.
+
+### Later changes
+
+To address review comments on one PR in a stack, run `/issue <n>` for that issue alone. If issues above it in the stack have branches, its new commits leave them behind: finish shipping, then tell me which PRs above it need rebasing (`gh stack checkout <pr>`, `gh stack rebase`, then `gh stack push`). Do not rebase or force-push them yourself.

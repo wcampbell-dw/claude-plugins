@@ -78,6 +78,8 @@ for (const command of [
   "gh pr create --base main --title 'Fix the $5 bug; and `more`' --body-file C:/tmp/body.md",
   'gh pr edit 27 --body-file C:/tmp/body.md',
   'gh pr view --json url --jq .url',
+  'gh stack link --open 41 42 43',
+  'gh stack link 41 42',
 ]) {
   test(`lets the shipper run ${command}`, async ($, on) => {
     setupAgents(on)
@@ -152,6 +154,12 @@ for (const [command, why] of [
   ['gh pr create --title x', '`--body-file` is required'],
   ['gh pr create --title x --body-file b --web', '--web'],
   ["gh pr create --title '-x' --body-file b", '`--title` needs a value'],
+  ['gh stack link 41 issue-2-fix', 'issue-2-fix'],
+  ['gh stack link --remote ./evil 41 42', '--remote'],
+  ['gh stack link --base dev 41 42', '--base'],
+  ['gh stack link 041 42', '041'],
+  ['gh stack submit --auto', '`gh stack submit`'],
+  ['gh stack push', '`gh stack push`'],
 ]) {
   test(`refuses the shipper ${command}`, async ($, on) => {
     setupAgents(on)
