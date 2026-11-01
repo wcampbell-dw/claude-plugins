@@ -14,10 +14,10 @@ const GLINT_REST = 10
 
 // What the status column says for an agent that has ended, in place of its
 // last tool call.
-const ENDED: Record<string, { text: string; color: string }> = {
-  completed: { text: 'finished', color: 'success' },
-  failed: { text: 'failed', color: 'error' },
-  killed: { text: 'stopped', color: 'error' },
+const ENDED: Record<string, { text: string; color: string; mark: string }> = {
+  completed: { text: 'finished', color: 'success', mark: '✓' },
+  failed: { text: 'failed', color: 'error', mark: '✗' },
+  killed: { text: 'stopped', color: 'error', mark: '✗' },
 }
 
 // A plugin's agent (`plugin:agent`) goes by its own name; a task's kind has no
@@ -126,7 +126,15 @@ const spin = (row: AgentRow, index: number, color: string) => {
   return { mark: FRAMES[index % FRAMES.length], color, step: index }
 }
 
-const glyph = (row: AgentRow, frame: number) => {
+const glyph = (
+  row: AgentRow,
+  frame: number,
+): { mark: string; color?: string; step?: number; dim?: boolean } => {
+  const ended = ENDED[row.status]
+  // Ended: the outcome's mark in place of the spinner, drawn disabled (the
+  // theme's gray, as `dimColor`) along with the type.
+  if (ended) return { mark: ended.mark, dim: true }
+
   switch (row.status) {
     case 'running':
       // Colors are theme keys, so they follow the person's theme: under an
@@ -140,7 +148,7 @@ const glyph = (row: AgentRow, frame: number) => {
       // Slower spin for an agent that's queued or blocked.
       return spin(row, Math.floor(frame / 3), 'warning')
     default:
-      // Idle or ended: frozen on the frame it stopped at.
+      // Idle: frozen on the frame it stopped at.
       return { mark: FRAMES[(shownFrame.get(row.id) ?? 0) % FRAMES.length], color: 'inactive', step: undefined }
   }
 }
@@ -163,15 +171,15 @@ const SpinnerList: ClientModule<{ rows: AgentRow[] }, State> = (props, surface) 
   return (
     <Box flexDirection="column">
       {props.rows.map(row => {
-        const { mark, color, step } = glyph(row, frame)
+        const { mark, color, step, dim } = glyph(row, frame)
         const ended = ENDED[row.status]
         const status = ended ?? (row.activity ? { text: row.activity, color: undefined } : undefined)
 
         const parts: Part[] = []
         if (row.isChild) parts.push({ text: CHILD_LEAD, dim: true, fixed: true })
-        parts.push({ text: `${mark} `, color, fixed: true })
+        parts.push({ text: `${mark} `, color, dim, fixed: true })
         // The type glints on the spinner's clock while it spins.
-        parts.push({ text: `${agentName(row.type)} `, color, glint: step })
+        parts.push({ text: `${agentName(row.type)} `, color, dim, glint: step })
         if (row.label) parts.push({ text: row.label, dim: row.isQuiet })
         if (status) {
           parts.push({ text: SEPARATOR, dim: true, sep: true })
