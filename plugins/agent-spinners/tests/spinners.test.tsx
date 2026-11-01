@@ -340,12 +340,17 @@ test("a row shows the agent's latest tool call beside its title", async ($, on) 
   expect(await row()).toBe('Scope the repo › lookup')
 
   // An agent that has ended says so in the status column, in place of its
-  // last call, its spinner stopped in gray.
+  // last call, a check in place of its spinner, mark and type drawn disabled.
   agents = [{ ...agents[0]!, status: 'completed' }]
   await clock.advance(500)
   expect(await row()).toBe('Scope the repo › finished')
   expect((await ui.find({ in: 'agent-spinners', type: 'Text', text: 'finished' }))?.props.color).toBe('success')
-  expect((await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]?.props.color).toBe('inactive')
+  const [endMark, endType] = await ui.findAll({ in: 'agent-spinners', type: 'Text' })
+  expect(endMark?.text).toBe('✓ ')
+  expect(endMark?.props.dimColor).toBe(true)
+  expect(endMark?.props.color).toBeUndefined()
+  expect(endType?.props.dimColor).toBe(true)
+  expect(endType?.props.color).toBeUndefined()
 
   agents = [{ ...agents[0]!, status: 'killed' }]
   await clock.advance(500)
@@ -554,7 +559,7 @@ test('a background command gets a top-level shell row until its notification', a
   )
   await clock.advance(500)
   expect(await text()).toContain('finished')
-  expect((await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]?.props.color).toBe('inactive')
+  expect((await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]?.props.dimColor).toBe(true)
 
   // Up for 8s after it ended, then gone.
   await clock.advance(7000)
