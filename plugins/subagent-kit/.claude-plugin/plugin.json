@@ -1,6 +1,6 @@
 {
   "name": "subagent-kit",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Scoper (Haiku), implementer (Sonnet), reviewer (Sonnet, Opus for risky changes) and shipper (Haiku) subagents, with rules for when the main session delegates to them, an /issue skill that works a GitHub issue through to a PR (or a queue of issues through to a gh-stack stack of PRs), and a /worktree-include skill that writes .worktreeinclude",
   "author": { "name": "wcampbell" },
   "homepage": "https://www.andreagrandi.it/posts/claude-code-subagents-to-save-usage/",
