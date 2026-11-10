@@ -22,7 +22,14 @@ Typing this command is my explicit request to assign the issues to me, commit, p
 5. Get into the issue's worktree with the `EnterWorktree` tool. It moves this session, its shells and its subagents into the worktree, and blocks commands aimed at the main checkout, so do everything the main checkout needs (steps 3 and 4) before this step. Take the first case that applies:
    - The worktree `.claude/worktrees/issue-$ARGUMENTS` exists (`git worktree list`): call `EnterWorktree` with its `path`.
    - A branch for the issue exists, locally (`git branch --list 'issue-$ARGUMENTS-*'`) or only on the remote (`git branch -r --list 'origin/issue-$ARGUMENTS-*'`): create the worktree on it with `git worktree add .claude/worktrees/issue-$ARGUMENTS <branch>` (for a remote-only branch, `git worktree add --track -b <branch> .claude/worktrees/issue-$ARGUMENTS origin/<branch>`). Then run `bash <this skill's base directory>/scripts/worktree.sh include .claude/worktrees/issue-$ARGUMENTS` to copy the gitignored files the repository lists in `.worktreeinclude`, and call `EnterWorktree` with the `path`. Continue from the branch's state.
-   - Otherwise call `EnterWorktree` with `name: "issue-$ARGUMENTS"`. Claude Code creates the worktree from `origin/<default-branch>` and copies the `.worktreeinclude` files itself. Rename its branch with `git branch -m issue-$ARGUMENTS-<short-slug>`. If `git rev-parse HEAD` does not match `origin/<default-branch>` (the user's `worktree.baseRef` setting can change the base), run `git reset --hard origin/<default-branch>`. The worktree is new, so this loses nothing.
+   - Otherwise pick the base branch as "Base branch" below says, then call `EnterWorktree` with `name: "issue-$ARGUMENTS"`. Claude Code creates the worktree and copies the `.worktreeinclude` files itself. Rename its branch with `git branch -m issue-$ARGUMENTS-<short-slug>`. If `git rev-parse HEAD` does not match `origin/<base>` (Claude Code starts from `origin/<default-branch>`, and the user's `worktree.baseRef` setting can change that), run `git reset --hard origin/<base>`. The worktree is new, so this loses nothing.
+
+   **Base branch.** The base is `<default-branch>` unless the issue needs code that exists only on an unmerged branch: the issue names a branch to build on, or the code it changes is only in an open PR. Then the base is the **top of that branch's stack**, never the branch itself when other open PRs are built on it: a new PR from the bottom or middle forks the stack and has to be rebased later. Find the stack from `gh pr list --state open --json number,headRefName,baseRefName --limit 200`:
+   - Walk up: start at the open PR whose `headRefName` is that branch, and move to the open PR whose `baseRefName` is the current PR's `headRefName`, until there is none. The last PR's head branch is the base. If at any step two or more open PRs share that base, the stack has forked: stop and ask which branch to build on.
+   - Walk down: from the same PR, follow `baseRefName` to the open PR with that head, until the base is `<default-branch>`.
+   - Keep the PR numbers you walked through, bottom first. Section 3 links the new PR on top of them.
+
+   Say in a progress line which base you picked and why.
 6. Gitignored files the build needs that `.worktreeinclude` does not cover, such as local settings or secrets, are not in the worktree. Copy the ones you need from the main checkout. If you had to copy any, mention in the final message that `/subagent-kit:worktree-include` can add them to `.worktreeinclude` so the next worktree gets them.
 7. Do all work inside the worktree. Still give every `scoper`, `implementer` and `shipper` run the worktree's absolute path and tell it to work only there. The `shipper` can't change directory, so it checks that its git runs in that worktree and stops if not. Run each command plainly from the worktree root: the isolation checks refuse `cd ... &&` chains.
 8. Other `/issue` sessions may be running in sibling worktrees. Never touch another issue's worktree.
@@ -37,6 +44,8 @@ Follow DELEGATION.md for scoping, implementation, your own review and verificati
 ## 3. Ship
 
 Hand off to `shipper` with: the worktree path, the exact files, the PR title, and the steps commit, push, and open a ready-for-review PR. The shipper can't write files, so write two files in your scratchpad and give it their paths: the commit message, matching the style of `git log --oneline -20`, and the PR body, with a summary, what was verified, and `Closes #$ARGUMENTS`.
+
+If the base (section 1, step 5) is not the default branch, have the shipper open the PR with `--base <base>`, then link it on top of the existing stack with `gh stack link --open <stack PRs, bottom first> <new PR>`. Check `gh stack --version` yourself first. If gh-stack is missing or the link fails, report it: the PR still chains through its base, so it can be linked later.
 
 ## 4. Clean up
 
@@ -58,6 +67,7 @@ Stop and ask me only when:
 - verification still fails after a reasonable fix attempt. A test run that was killed or interrupted, for example by low memory or a timeout, has not failed: rerun it once (alone, or in smaller pieces if memory was the cause) before stopping.
 - shipper stops on a pre-flight problem you cannot fix yourself
 - a queued issue's existing branch is not based on the previous issue's branch (see "Queue")
+- the stack an issue has to build on has forked (see "Base branch" in section 1, step 5)
 
 ## Final message
 
@@ -65,7 +75,7 @@ Give the PR link, one line on what was verified, and anything left behind (a kep
 
 ## Queue
 
-A queue of issues becomes a stack: issue 1's PR targets the default branch, issue 2's branch starts from issue 1's and its PR targets issue 1's branch, and so on. Below, "the previous branch" means the branch of the issue just before in the queue, and `<first>` the first issue number.
+A queue of issues becomes a stack: issue 1's PR targets its base (section 1, step 5: the default branch, or the top of an existing stack), issue 2's branch starts from issue 1's and its PR targets issue 1's branch, and so on. Below, "the previous branch" means the branch of the issue just before in the queue, and `<first>` the first issue number.
 
 ### Set up once
 
@@ -82,14 +92,14 @@ A queue of issues becomes a stack: issue 1's PR targets the default branch, issu
    - If a branch `issue-<n>-*` exists, locally or on the remote, switch to it (`git switch <branch>`, or `git switch --track -c <branch> origin/<branch>`) and check it contains the previous branch with `git merge-base --is-ancestor <previous-branch> HEAD`. If it does not, stop and ask: rebasing it would rewrite pushed history.
    - Otherwise create it from the previous branch's tip with `git switch -c issue-<n>-<short-slug>`.
 2. Build it as section 2 says, scoped to this issue alone. The previous issues' changes are already in the branch: the scoper, implementer and reviewer should treat them as existing code. Give the reviewer the diff against the previous branch (`git diff <previous-branch>...HEAD`), not against the default branch.
-3. Ship it as section 3 says, with `Closes #<n>` in the body. The shipper opens the PR with `--base <previous-branch>`, or `--base <default-branch>` for the first issue. If the branch already has an open PR (`gh pr view --json url,baseRefName`), have the shipper commit and push only, and fix a wrong base with `gh pr edit --base`.
+3. Ship it as section 3 says, with `Closes #<n>` in the body. The shipper opens the PR with `--base <previous-branch>`, or `--base <base>` for the first issue. Skip section 3's stack link here: the queue links once, below. If the branch already has an open PR (`gh pr view --json url,baseRefName`), have the shipper commit and push only, and fix a wrong base with `gh pr edit --base`.
 4. Note the PR number, then go on to the next issue without cleaning up.
 
 If an issue hits a "When to stop" case, stop the queue there: later issues would stack on it. Link and clean up what shipped (below), then ask.
 
 ### Link the stack
 
-Once two or more PRs in the queue are open, hand the shipper `gh stack link --open <pr-1> <pr-2> ...` with the PR numbers in queue order, bottom first. It creates the stack on GitHub, or extends one that already holds some of them. If it fails, for example because stacked PRs are not enabled for the repository, report its output: the PRs still chain through their bases, so they can be linked later.
+Once two or more PRs in the queue are open, or one is open on top of an existing stack, hand the shipper `gh stack link --open <existing stack PRs> <pr-1> <pr-2> ...`: the existing stack's PRs from section 1, step 5 (if any) bottom first, then the queue's in queue order. It creates the stack on GitHub, or extends one that already holds some of them. If it fails, for example because stacked PRs are not enabled for the repository, report its output: the PRs still chain through their bases, so they can be linked later.
 
 ### Clean up once
 
