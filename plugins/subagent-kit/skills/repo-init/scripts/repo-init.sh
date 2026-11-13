@@ -5,6 +5,7 @@
 #   repo-init.sh labels                    create the standard labels that are missing
 #   repo-init.sh merge-settings            allow only squash merges and delete merged branches
 #   repo-init.sh workflow                  copy the auto-close workflow into .github/workflows
+#   repo-init.sh pr-template               copy the pull request template into .github
 # Every command is safe to run again: it only adds what is missing and never deletes or edits a
 # label or file that exists. Set GH_REPO=owner/name to aim the labels and merge-settings commands
 # at another repository.
@@ -13,6 +14,8 @@ set -u
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 WORKFLOW_TEMPLATE="$HERE/../templates/close-linked-issues.yml"
 WORKFLOW_PATH=.github/workflows/close-linked-issues.yml
+PR_TEMPLATE="$HERE/../templates/pull_request_template.md"
+PR_TEMPLATE_PATH=.github/pull_request_template.md
 
 # name|color|description. The first five match the labels the triage skills expect.
 LABELS=(
@@ -32,6 +35,22 @@ need_gh() {
 
 has_remote() { [ -n "$(git remote get-url origin 2>/dev/null)" ]; }
 
+# Print the pull request template GitHub would use, if any: pull_request_template.md in the root,
+# .github or docs (any letter case), or a PULL_REQUEST_TEMPLATE folder in one of them.
+existing_pr_template() {
+  local dir f
+  for dir in .github . docs; do
+    [ -d "$dir" ] || continue
+    for f in "$dir"/* "$dir"/.[!.]*; do
+      [ -e "$f" ] || continue
+      case $(basename "$f" | tr '[:upper:]' '[:lower:]') in
+        pull_request_template.md|pull_request_template) echo "${f#./}"; return 0 ;;
+      esac
+    done
+  done
+  return 1
+}
+
 repo_slug() { gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null; }
 
 status() {
@@ -45,6 +64,7 @@ status() {
     echo "origin=none"
   fi
   [ -f "$WORKFLOW_PATH" ] && echo "workflow=present" || echo "workflow=missing"
+  local tpl; tpl=$(existing_pr_template) && echo "pr_template=$tpl" || echo "pr_template=missing"
   need_gh 2>/dev/null || { echo "gh=unavailable"; return 0; }
   echo "gh=ok"
   local slug; slug=$(repo_slug)
@@ -121,11 +141,27 @@ workflow() {
   echo "created  $WORKFLOW_PATH (not committed)"
 }
 
+pr_template() {
+  [ -f "$PR_TEMPLATE" ] || fail "template missing: $PR_TEMPLATE"
+  local existing
+  if existing=$(existing_pr_template); then
+    if [ -f "$existing" ] && cmp -s "$PR_TEMPLATE" "$existing"; then
+      echo "kept     $existing (already current)"
+    else
+      echo "kept     $existing (GitHub already uses it; not overwritten)"
+    fi
+    return 0
+  fi
+  mkdir -p "$(dirname "$PR_TEMPLATE_PATH")" && cp "$PR_TEMPLATE" "$PR_TEMPLATE_PATH" || fail "could not write $PR_TEMPLATE_PATH"
+  echo "created  $PR_TEMPLATE_PATH (not committed)"
+}
+
 case ${1:-} in
   status) shift; status ;;
   create) shift; create "$@" ;;
   labels) shift; labels ;;
   merge-settings) shift; merge_settings ;;
   workflow) shift; workflow ;;
-  *) echo "usage: ${0##*/} status|create [--public] [name]|labels|merge-settings|workflow" >&2; exit 2 ;;
+  pr-template) shift; pr_template ;;
+  *) echo "usage: ${0##*/} status|create [--public] [name]|labels|merge-settings|workflow|pr-template" >&2; exit 2 ;;
 esac

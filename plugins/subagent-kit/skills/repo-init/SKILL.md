@@ -1,18 +1,18 @@
 ---
 name: repo-init
-description: Set up this repository for the issue workflow: a GitHub repo with an origin remote (private by default), the standard triage labels, squash-only merges, and a workflow that closes issues when a PR merges into a non-default branch.
+description: Set up this repository for the issue workflow: a GitHub repo with an origin remote (private by default), the standard triage labels, squash-only merges, a workflow that closes issues when a PR merges into a non-default branch, and a pull request template.
 disable-model-invocation: true
 ---
 
 Set up the current repository for the issue workflow. Safe to run again: each step adds only what is missing.
 
-Typing this command is my request for the label, merge-setting and workflow steps below. Creating the GitHub repository needs my yes in this conversation (step 2).
+Typing this command is my request for the label, merge-setting, workflow and template steps below. Creating the GitHub repository needs my yes in this conversation (step 2).
 
 All steps run through `bash <this skill's base directory>/scripts/repo-init.sh <command>` from the repository root. Call it `repo-init.sh` below.
 
 ## 1. Look first
 
-Run `repo-init.sh status`. It prints `key=value` lines: `git`, `commits`, `branch`, `origin`, `workflow`, `gh`, `repo`, `labels_missing`, `squash_only`, `delete_branch_on_merge`, `visibility`.
+Run `repo-init.sh status`. It prints `key=value` lines: `git`, `commits`, `branch`, `origin`, `workflow`, `pr_template`, `gh`, `repo`, `labels_missing`, `squash_only`, `delete_branch_on_merge`, `visibility`.
 
 - `git=no`: ask me whether to run `git init`. Do it only on a yes, then run `status` again.
 - `gh=unavailable`: stop and tell me to install the `gh` CLI and run `gh auth login`.
@@ -29,7 +29,7 @@ Ask me once, with the recommended answer first:
 
 On a yes, run `repo-init.sh create [--public] [name]`. It adds `origin` and pushes nothing. Tell me the repository URL, and if `commits` is not `0`, that nothing is pushed yet and the push command to run (`git push -u origin <branch>`). Do not push for me.
 
-If I skip, run the label and merge-setting steps only when `repo` is set; otherwise say they need a GitHub repository and stop after step 5.
+If I skip, run the label and merge-setting steps only when `repo` is set; otherwise say they need a GitHub repository and skip to step 5.
 
 ## 3. Labels
 
@@ -55,6 +55,14 @@ Run `repo-init.sh workflow`. It copies `templates/close-linked-issues.yml` to `.
 
 It leaves the new file uncommitted. Say so, and that it takes effect once the file is on the default branch. Do not commit or push it.
 
+## 6. Pull request template
+
+Run `repo-init.sh pr-template`. It copies `templates/pull_request_template.md` to `.github/pull_request_template.md` unless GitHub already has a template for this repository (`pr_template` in `status` names it). It never overwrites or adds a second template.
+
+The template has a `## Summary` that starts with why the change was made, a `## Verification` that lists each check and its result and says what is not checked yet, optional `Known limits` and `Stack` sections, and the `Closes #` line. Its guidance is in HTML comments. Squash merges use the PR body as the commit message, so whoever fills in the template deletes the comments.
+
+The file is left uncommitted, like the workflow. Do not commit or push it.
+
 ## Report
 
-Finish with a short list of what was created, what already existed, and what I still have to do myself: push, commit the workflow file, and anything skipped. If branch protection or required checks matter for this repository, say they are not set up here.
+Finish with a short list of what was created, what already existed, and what I still have to do myself: push, commit the workflow and template files, and anything skipped. If branch protection or required checks matter for this repository, say they are not set up here.
