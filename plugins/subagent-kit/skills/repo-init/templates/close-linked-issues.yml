@@ -1,0 +1,56 @@
+# Closes the issues a pull request names with a closing keyword (Closes #12, Fixes #3,
+# Resolves #7) when it merges into a branch other than the default branch. GitHub closes
+# them itself only for merges into the default branch, so work that lands on a feature or
+# stack branch would otherwise leave its issues open.
+name: Close linked issues
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  close:
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref != github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            // Ignore HTML comments (PR templates often carry an example "Closes #N") and code.
+            const body = (pr.body || '')
+              .replace(/<!--[\s\S]*?-->/g, '')
+              .replace(/```[\s\S]*?```/g, '')
+              .replace(/`[^`\n]*`/g, '');
+            const keyword = /\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(#\d+(?:\s*(?:,|and)\s*#\d+)*)/gi;
+            const numbers = new Set();
+            for (const match of body.matchAll(keyword)) {
+              for (const n of match[1].matchAll(/#(\d+)/g)) numbers.add(Number(n[1]));
+            }
+            const base = pr.base.ref;
+            for (const issue_number of numbers) {
+              const { owner, repo } = context.repo;
+              let issue;
+              try {
+                ({ data: issue } = await github.rest.issues.get({ owner, repo, issue_number }));
+              } catch (error) {
+                core.warning(`#${issue_number}: ${error.message}`);
+                continue;
+              }
+              if (issue.pull_request || issue.state !== 'open') continue;
+              await github.rest.issues.createComment({
+                owner, repo, issue_number,
+                body: `Done in #${pr.number}, merged into \`${base}\`.`,
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number,
+                state: 'closed', state_reason: 'completed',
+              });
+              core.info(`Closed #${issue_number}`);
+            }
