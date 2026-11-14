@@ -12,15 +12,15 @@ Run `bash <this skill's base directory>/scripts/next.sh` from anywhere inside th
 
 | Bucket | Means |
 | --- | --- |
-| Ready now | Open, no open blocker, no open PR, not waiting, not for a human, not awaiting triage |
-| In flight | Has an open PR (named by a closing keyword, or from a branch called `issue-<n>-...`), with its base, checks and review state |
+| Ready now | Open, no open blocker, not in flight, not waiting, not for a human, not awaiting triage |
+| In flight | Being worked on. Has an open PR (named by a closing keyword, or from a branch called `issue-<n>-...`), shown with its base, checks and review state. Or has no PR yet but has a local worktree or a GitHub branch named `issue-<n>-...`, or is assigned to someone (`/subagent-kit:issue` assigns an issue before it starts, and a queue assigns every issue up front). An issue that is only assigned (no PR, worktree or branch) and is Blocked, Waiting, For a human or Needs triage stays in that bucket |
 | Blocked | Has an open issue in its native "blocked by" list |
 | Waiting | Labeled `waiting` or `blocked`, or has a `Not before: YYYY-MM-DD` line in its body that is still ahead |
 | For a human | Labeled `ready-for-human`: an owner action, a decision, a manual check |
 | Needs triage | Labeled `needs-triage` or `needs-info` |
 | Epics | Has sub-issues. A container, shown as progress, never offered as work |
 
-If it fails, say why (usually `gh` is not signed in, or the folder has no GitHub remote) and stop. If it warns that more than 100 issues are open, say the report covers only the oldest 100.
+If it fails, say why (usually `gh` is not signed in, or the folder has no GitHub remote) and stop. If it warns that more than 100 issues are open, say the report covers only the oldest 100. If it warns that only 100 `issue-` branches were read, say a Ready issue may already have a branch.
 
 ## 2. Show the report
 
@@ -34,6 +34,8 @@ Keep it short and concrete, in this order:
    - Unblocking the most work first: count how many Blocked issues list it, directly or through a chain.
    - Anything with a `Not before:` date that has passed (marked in the report).
    - Finishing before starting: an open PR that is failing checks or has had no review outranks new work, so say so.
+
+   Never recommend an In flight issue: another session is probably working on it, and a second one would duplicate the work. This holds when it has no PR yet, too.
 2. **Parallel is safe** only when the issues have no blocker or parent relationship between them and their `files:` lines (shown in brackets when an issue has a `Files:` line) do not overlap. An issue with no `Files:` line gets "files unknown": say so and recommend running it alone, or read the issue to compare. Never recommend more than three at once: each one ends in a PR I have to review.
 3. **For me, not an agent.** List the For a human items, and any Ready items that read like owner actions, with what each needs from me.
 4. **Time-gated.** Waiting issues with a date, soonest first, and what unblocks when each passes.
@@ -42,5 +44,6 @@ Keep it short and concrete, in this order:
    - Ready items missing the `ready-for-agent` label, so the queue's labels are not trustworthy yet (offer `/subagent-kit:repo-init` if the standard labels are missing)
    - PRs whose base is not the default branch, and whether anything is merged into them but not yet on the default branch
    - a Blocked issue whose blocker is Waiting or For a human, so nothing will move until I act
+   - an In flight issue marked `may be abandoned` (no PR, no local worktree, no new commit or assignment for over 2 days): ask whether its session is still running. An issue waiting its turn in a long `/subagent-kit:issue` queue is assigned with no branch yet, so it can be flagged while the queue is healthy. If it is not running, `/subagent-kit:issue <n>` picks up its branch, and unassigning it puts it back in Ready
 
 If nothing is Ready, say what unblocks the most and why, instead of inventing work.
