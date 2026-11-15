@@ -15,10 +15,12 @@ case $a$b in *[!0-9]*) fail "issue numbers must be plain numbers: $a $b" ;; esac
 [ "$a" != "$b" ] || fail "an issue cannot be linked to itself"
 
 slug=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) || fail "no GitHub repository here"
-id_of() { gh api "repos/$slug/issues/$1" -q .id 2>/dev/null; }
-b_id=$(id_of "$b") || true
+field_of() { gh api "repos/$slug/issues/$1" -q ".$2" 2>/dev/null; }
+b_id=$(field_of "$b" id) || true
 [ -n "$b_id" ] || fail "no issue #$b in $slug"
-[ -n "$(id_of "$a")" ] || fail "no issue #$a in $slug"
+# The issue that receives the link (the parent, or the blocked issue); its URL ends the output line.
+a_url=$(field_of "$a" html_url) || true
+[ -n "$a_url" ] || fail "no issue #$a in $slug"
 
 case $kind in
   sub)        endpoint="repos/$slug/issues/$a/sub_issues";             field=sub_issue_id ;;
@@ -26,8 +28,8 @@ case $kind in
   *) fail "unknown link type: $kind" ;;
 esac
 
-out=$(gh api -X POST "$endpoint" -F "$field=$b_id" 2>&1) && { echo "linked   #$b ($kind) #$a"; exit 0; }
+out=$(gh api -X POST "$endpoint" -F "$field=$b_id" 2>&1) && { echo "linked   #$b ($kind) #$a  $a_url"; exit 0; }
 case $out in
-  *"already"*|*"Duplicate"*|*"duplicate"*) echo "kept     #$b ($kind) #$a (already linked)"; exit 0 ;;
+  *"already"*|*"Duplicate"*|*"duplicate"*) echo "kept     #$b ($kind) #$a (already linked)  $a_url"; exit 0 ;;
 esac
 fail "could not link #$b to #$a: $out"
