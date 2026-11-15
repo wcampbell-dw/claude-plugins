@@ -36,15 +36,19 @@ If I skip, run the label and merge-setting steps only when `repo` is set; otherw
 
 Run `repo-init.sh labels`. It creates the standard labels that are missing and leaves existing ones alone:
 
-| Label | Meaning |
-| --- | --- |
-| `needs-triage` | Not evaluated yet |
-| `needs-info` | Waiting on the reporter |
-| `ready-for-agent` | Fully specified; an agent can work it alone |
-| `ready-for-human` | Needs a person: an owner action, a decision, a manual check |
-| `waiting` | Waiting on a date or an outside party; the issue body says which, with a `Not before: YYYY-MM-DD` line for dates |
+| Label | Meaning | What `/subagent-kit:issue` does |
+| --- | --- | --- |
+| `needs-triage` | Not evaluated yet | Writes acceptance criteria, splits it if needed, moves it to another state |
+| `needs-research` | A question an agent can answer by investigating | Investigates and posts findings |
+| `needs-decision` | We have to choose before it can be built | Lays out options and grills me, then records the decision |
+| `needs-info` | Waiting on a named outside person | Checks whether the answer arrived, or writes up the open questions |
+| `ready-for-agent` | Fully specified; no human needed | Builds it and opens a PR |
+| `ready-for-human` | Needs a person's hands: access, credentials, a UI, production | Does the agent's part and writes a runbook, or checks my work |
+| `waiting` | Goes beside a state label: waiting on a date or an outside event, with a `Not before: YYYY-MM-DD` or `Waiting on:` line in the body | Checks the condition first |
 
-`/subagent-kit:next` reads these labels, the issue's native "blocked by" links, its parent and sub-issues, and its open PRs. Dependencies belong in GitHub's "blocked by" field, not in a label.
+Every open issue gets exactly one of the first six, except an epic (an issue with sub-issues), which gets none. `/subagent-kit:next` reads these labels, the issue's native "blocked by" links, its parent and sub-issues, and its open PRs.
+
+The script creates no `blocked` or `wontfix` label: dependencies belong in GitHub's "blocked by" field, and an issue that won't be done is closed as "not planned". It leaves them alone where a repository already has them. It never edits an existing label, so a repository set up before `needs-research` and `needs-decision` existed gets those two and keeps its older descriptions on the rest; say so when the output shows `kept` for them.
 
 ## 4. Merge settings
 

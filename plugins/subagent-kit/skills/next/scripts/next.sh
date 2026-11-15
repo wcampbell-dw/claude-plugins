@@ -76,8 +76,10 @@ fi
 #   blocked    has an open "blocked by" issue
 #   waiting    labeled waiting or blocked, or carries a "Not before:" date still ahead
 #   triage     labeled needs-triage or needs-info
-#   human      labeled ready-for-human
+#   human      labeled ready-for-human or needs-decision
+#   research   labeled needs-research: agent work that ends in findings, not a PR
 #   ready      everything else; "labeled" says whether it carries ready-for-agent
+# next_step is the body's first "Waiting on:", "Decision:" or "Question:" line.
 report=$(jq --arg today "$today" --arg slug "$slug" --argjson wts "$worktrees" '
   .data.repository as $r
   | ($r.pullRequests.nodes) as $prs
@@ -117,6 +119,7 @@ report=$(jq --arg today "$today" --arg slug "$slug" --argjson wts "$worktrees" '
           subs: {total: (.subIssues.nodes | length), open: ([.subIssues.nodes[] | select(.state == "OPEN")] | length)},
           not_before: (($body | capture("(?im)^[ \\t]*not before:[ \\t]*(?<d>[0-9]{4}-[0-9]{2}-[0-9]{2})") | .d) // null),
           files: (($body | capture("(?im)^[ \\t]*files:[ \\t]*(?<f>[^\\r\\n]+)") | .f) // null),
+          next_step: (($body | capture("(?im)^[ \\t]*(?<k>waiting on|decision|question):[ \\t]*(?<v>[^\\r\\n]+)") | ({"waiting on": "Waiting on", "decision": "Decision", "question": "Question"}[.k | ascii_downcase]) + ": " + .v) // null),
           prs: prs_for($i.number; [.closedByPullRequestsReferences.nodes[].number]),
           work: work_for($i.number; (if (.assignees.nodes | length) > 0 then (.timelineItems.nodes[0].createdAt // null) else null end))
         }
@@ -128,7 +131,8 @@ report=$(jq --arg today "$today" --arg slug "$slug" --argjson wts "$worktrees" '
           elif ((.labels | index("waiting")) != null or (.labels | index("blocked")) != null
                 or (.not_before != null and .not_before > $today)) then "waiting"
           elif ((.labels | index("needs-triage")) != null or (.labels | index("needs-info")) != null) then "triage"
-          elif (.labels | index("ready-for-human")) != null then "human"
+          elif (.labels | index("ready-for-human")) != null or (.labels | index("needs-decision")) != null then "human"
+          elif (.labels | index("needs-research")) != null then "research"
           elif (.assignees | length) > 0 then "in_flight"
           else "ready" end)
       # Started but no PR, no local worktree, and nothing new for over 2 days: probably abandoned.
@@ -148,6 +152,7 @@ report=$(jq --arg today "$today" --arg slug "$slug" --argjson wts "$worktrees" '
       blocked: [$issues[] | select(.bucket == "blocked")],
       waiting: [$issues[] | select(.bucket == "waiting")],
       human: [$issues[] | select(.bucket == "human")],
+      research: [$issues[] | select(.bucket == "research")],
       triage: [$issues[] | select(.bucket == "triage")],
       epics: [$issues[] | select(.bucket == "epic")],
       prs: [$prs[] | {number, title, url, base: .baseRefName, head: .headRefName, draft: .isDraft, checks: pr_state, review: .reviewDecision}]
@@ -160,6 +165,7 @@ fi
 
 jq -r '
   def who: if (.assignees | length) > 0 then "  (" + (.assignees | join(", ")) + ")" else "" end;
+  def step: if .next_step then "\n      " + .next_step else "" end;
   def extra: [ (if .files then "files: " + .files else empty end) ] | if length > 0 then "  [" + join("; ") + "]" else "" end;
   def section($title; $items; line):
     "\n== \($title) (\($items | length))",
@@ -191,11 +197,15 @@ jq -r '
 
   section("Waiting"; .waiting;
     "#\(.number) \(.title)  " + (if .not_before then "not before \(.not_before)" else "no date given" end)
-    + (if (.labels | index("blocked")) then "  [labeled blocked]" else "" end)),
+    + (if (.labels | index("blocked")) then "  [labeled blocked]" else "" end) + step),
 
-  section("For a human"; .human; "#\(.number) \(.title)" + who),
+  section("Research (agent, no PR)"; .research; "#\(.number) \(.title)" + who + extra + step),
 
-  section("Needs triage"; .triage; "#\(.number) \(.title)  [" + ([.labels[] | select(. == "needs-triage" or . == "needs-info")] | join(", ")) + "]"),
+  section("For a human"; .human;
+    "#\(.number) \(.title)" + (if (.labels | index("needs-decision")) then "  [needs-decision]" else "" end) + who + step),
+
+  section("Needs triage"; .triage;
+    "#\(.number) \(.title)  [" + ([.labels[] | select(. == "needs-triage" or . == "needs-info")] | join(", ")) + "]" + step),
 
   section("Epics"; .epics;
     "#\(.number) \(.title)  \(.subs.total - .subs.open)/\(.subs.total) sub-issues done"
