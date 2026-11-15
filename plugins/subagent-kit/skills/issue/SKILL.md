@@ -1,21 +1,32 @@
 ---
 name: issue
-description: Work a GitHub issue end to end in its own worktree, open a ready-for-review PR, then remove the worktree. Several issues queue up as a stack of PRs, one per issue, linked with gh-stack.
+description: Do the next step a GitHub issue's state label calls for. A ready-for-agent issue is built in its own worktree and shipped as a ready-for-review PR; triage, research, decision, info and human issues get triaged, investigated, decided with me, chased or given a runbook. Several issues queue up, and the ready-for-agent ones ship as a stack of PRs linked with gh-stack.
 disable-model-invocation: true
 argument-hint: <issue-number> [<issue-number>...]
 ---
 
 Arguments: `$ARGUMENTS`
 
-With one issue number, work that issue from start to a ready-for-review pull request, following sections 1 to 4 with `$ARGUMENTS` as the number.
+Every open issue carries one state label, and this command does the next step that label calls for. With one issue number, start at section 0 with `$ARGUMENTS` as the number. It picks the path: a `ready-for-agent` issue is built and shipped as a ready-for-review pull request through sections 1 to 4, and every other state follows `STATES.md` in this skill's base directory.
 
-With several, they are a queue: follow "Queue" at the end of this file. It works them in the order given, one at a time, and ships them as a stack of PRs, each based on the one before.
+With several, they are a queue: follow "Queue" at the end of this file. It does each issue's step in the order given, and ships the `ready-for-agent` ones as a stack of PRs, each based on the one before.
 
-Typing this command is my explicit request to assign the issues to me, commit, push and open ready-for-review PRs (not drafts) for them, and for a queue to link those PRs into a stack. Do not ask before doing those steps. Stop and ask only for the cases listed under "When to stop".
+Typing this command is my explicit request to do the step each issue's state calls for: to edit issue bodies and labels, post comments, link and close issues as `STATES.md` says, and, for issues that ship a PR, to assign them to me, commit, push and open ready-for-review PRs (not drafts), and for a queue to link those PRs into a stack. Do not ask before doing those steps. Stop and ask only where `STATES.md` says to and for the cases listed under "When to stop".
+
+## 0. Pick the path
+
+1. Run `bash <this skill's base directory>/scripts/state.sh $ARGUMENTS` and `gh issue view $ARGUMENTS --json number,title,state,body,comments,labels,assignees`. Plain `--comments` can print nothing. `state.sh` prints the facts `gh issue view` lacks: open native blockers, sub-issues, the state label and the `Waiting on:`, `Decision:`, `Question:` and `Not before:` lines. Its `route` is the first case below that applies.
+2. Follow the route:
+   - `not-an-issue` or `closed`: stop and say so.
+   - `blocked`: list each open blocker with its title and state label, and stop. Name `/subagent-kit:issue <blocker>` for any blocker that has a step to run.
+   - `epic`: an epic has no state label and is never worked itself. Run `bash <this skill's base directory>/../next/scripts/next.sh --json`, report each sub-issue's bucket (the closed ones as done), and name the next one to run as a command, picked by `/subagent-kit:next`'s rules: never an in-flight one, and the one that unblocks the most first. If every sub-issue is closed, say the epic can be closed. Stop.
+   - `waiting`: check the condition. A `Not before:` date has passed when `date_passed` is true. A `Waiting on:` event has happened when the comments, linked issues or PRs show it; if only I would know, ask me. If it has not happened, print a one-line status, such as `#12 still waiting on the vendor sandbox (not before 2026-12-01)`, and stop. If it has, remove the label with `gh issue edit $ARGUMENTS --remove-label waiting`, delete the `Not before:` line it waited on, and follow the route for `state`. Delete a `Waiting on:` line too, unless the state is `needs-info` or `ready-for-human`, whose step reads it.
+   - `ready-for-agent`: sections 1 to 4.
+   - Any other state: its section in `STATES.md`. `needs-triage` also covers an issue with no state label or more than one; `state_problem` says which, so mention it.
 
 ## 1. Set up
 
-1. Run `gh issue view $ARGUMENTS --json number,title,state,body,comments,labels,assignees`. Plain `--comments` can print nothing. If the issue is closed or the number is not an issue, stop.
+1. Section 0 has read the issue. A non-build path that ships a PR (`STATES.md`) starts here too.
 2. Assign the issue to me with `gh issue edit $ARGUMENTS --add-assignee @me`. This leaves any existing assignees in place. If it fails, report the error and carry on.
 3. From the main checkout, find the default branch with `gh repo view --json defaultBranchRef -q .defaultBranchRef.name` and run `git fetch origin`.
 4. Make sure `.claude/worktrees/` is ignored. If `git check-ignore -q .claude/worktrees` fails, append `.claude/worktrees/` to `.git/info/exclude` (local only, never commit it).
@@ -43,7 +54,7 @@ Follow DELEGATION.md for scoping, implementation, your own review and verificati
 
 ## 3. Ship
 
-Hand off to `shipper` with: the worktree path, the exact files, the PR title, and the steps commit, push, and open a ready-for-review PR. The shipper can't write files, so write two files in your scratchpad and give it their paths: the commit message, matching the style of `git log --oneline -20`, and the PR body, with a summary, what was verified, and `Closes #$ARGUMENTS`.
+Hand off to `shipper` with: the worktree path, the exact files, the PR title, and the steps commit, push, and open a ready-for-review PR. The shipper can't write files, so write two files in your scratchpad and give it their paths: the commit message, matching the style of `git log --oneline -20`, and the PR body, with a summary, what was verified, and `Closes #$ARGUMENTS` (or `Refs #$ARGUMENTS` when `STATES.md` says the PR doesn't finish the issue).
 
 If the base (section 1, step 5) is not the default branch, have the shipper open the PR with `--base <base>`, then link it on top of the existing stack with `gh stack link --open <stack PRs, bottom first> <new PR>`. Check `gh stack --version` yourself first. If gh-stack is missing or the link fails, report it: the PR still chains through its base, so it can be linked later.
 
@@ -62,7 +73,7 @@ The remote branch stays for the PR. To address review comments later, run `/issu
 
 Stop and ask me only when:
 
-- the issue is ambiguous enough that reasonable readers would build different things
+- a `ready-for-agent` issue is ambiguous enough that reasonable readers would build different things. Move it to `needs-decision` first: add a `Decision:` line naming the question and swap the label, as `STATES.md` describes. If I answer now, record the decision as its `needs-decision` section says, put the label back to `ready-for-agent`, and carry on building.
 - the real scope is much larger than the issue describes, or needs an architectural decision I should make
 - verification still fails after a reasonable fix attempt. A test run that was killed or interrupted, for example by low memory or a timeout, has not failed: rerun it once (alone, or in smaller pieces if memory was the cause) before stopping.
 - shipper stops on a pre-flight problem you cannot fix yourself
@@ -71,17 +82,22 @@ Stop and ask me only when:
 
 ## Final message
 
-Give the PR link, one line on what was verified, and anything left behind (a kept worktree or branch and why). For a queue, list every issue with its PR link in stack order, the stack link if `gh stack link` printed one, and any issues not reached.
+Give the PR link, one line on what was verified, and anything left behind (a kept worktree or branch and why). For a path in `STATES.md`, give the issue link, what was done (the comment posted, the body or labels changed), its state now, and the command to run next. For a queue, list every issue with its PR link in stack order, the stack link if `gh stack link` printed one, then each issue that took another path with its outcome, and any issues not reached.
 
 ## Queue
 
-A queue of issues becomes a stack: issue 1's PR targets its base (section 1, step 5: the default branch, or the top of an existing stack), issue 2's branch starts from issue 1's and its PR targets issue 1's branch, and so on. Below, "the previous branch" means the branch of the issue just before in the queue, and `<first>` the first issue number.
+Only `ready-for-agent` issues join the stack. Every other issue in the queue takes its own path from section 0, outside the stack.
+
+The `ready-for-agent` issues become a stack: issue 1's PR targets its base (section 1, step 5: the default branch, or the top of an existing stack), issue 2's branch starts from issue 1's and its PR targets issue 1's branch, and so on. Below, "the queue" means those issues in the order given, "the previous branch" the branch of the issue just before in it, and `<first>` its first issue number.
 
 ### Set up once
 
-1. Check `gh stack --version`. If it fails, stop and tell me to run `gh extension install github/gh-stack`.
-2. Run section 1, steps 1 and 2, for every issue in the queue before starting any work. If any is closed or not an issue, stop before building anything and say which.
-3. Run section 1, steps 3, 4 and 6 to 8 as written. For step 5, the whole queue shares one worktree, `.claude/worktrees/stack-<first>`, and moves from branch to branch inside it. Its cases become:
+1. Run section 0, step 1, for every issue before starting any work. If any is closed or not an issue, stop before doing anything and say which. A blocker that is itself a `ready-for-agent` issue earlier in this queue doesn't count, since it will sit below in the stack: when every open blocker is such an issue, take the route section 0 would give with no blockers (`epic`, `waiting` or `state`) instead of `blocked`. If an issue's blocker comes later in the queue, stop and ask about the order.
+2. Do the step for each issue whose route is not `ready-for-agent`, one at a time in the order given, as section 0 says. Where section 0 says to stop, as for a blocked or epic issue, that ends this issue's step, not the queue. One that reaches `ready-for-agent` along the way (after triage or a decision) does not join this stack: name it in the final message to run next. A PR such a step opens (`STATES.md`) is its own, from its own `issue-<n>` worktree, and is cleaned up before the next issue.
+3. If no `ready-for-agent` issues remain, stop here. If one remains, follow sections 1 to 4 for it alone.
+4. Check `gh stack --version`. If it fails, stop and tell me to run `gh extension install github/gh-stack`.
+5. Run section 1, step 2, for every issue in the queue.
+6. Run section 1, steps 3, 4 and 6 to 8 as written. For step 5, the whole queue shares one worktree, `.claude/worktrees/stack-<first>`, and moves from branch to branch inside it. Its cases become:
    - The worktree exists: call `EnterWorktree` with its `path`.
    - The first issue's branch exists (locally or on the remote): create the worktree on it as section 1, step 5 says, under the `stack-<first>` path, copy the `.worktreeinclude` files, and enter it.
    - Otherwise call `EnterWorktree` with `name: "stack-<first>"` and rename and check its branch as section 1, step 5 says, naming it `issue-<first>-<short-slug>`.

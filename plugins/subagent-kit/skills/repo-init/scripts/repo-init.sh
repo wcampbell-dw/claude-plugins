@@ -28,12 +28,17 @@ SETUP_FILES=("$WORKFLOW_PATH" "$PR_TEMPLATE_PATH" .gitattributes CLAUDE.md)
 EOL_RULE='* text=auto eol=lf'
 COMMIT_TITLE="Set up the repository for the issue workflow"
 
-# name|color|description. The first five match the labels the triage skills expect.
+# name|color|description. The six state labels /subagent-kit:issue dispatches on, then the waiting
+# modifier. Descriptions stay under GitHub's 100-character limit. Existing labels are never edited,
+# and blocked or wontfix are never created: blockers are native "blocked by" links, and an issue
+# that won't be done is closed as not planned.
 LABELS=(
-  "needs-triage|FBCA04|Maintainer needs to evaluate this issue"
-  "needs-info|D4C5F9|Waiting on reporter for more information"
-  "ready-for-agent|0E8A16|Fully specified, ready for an AFK agent"
-  "ready-for-human|1D76DB|Requires human implementation"
+  "needs-triage|FBCA04|Not evaluated yet"
+  "needs-research|5319E7|A question an agent can answer by investigating: a spike, probe or data check"
+  "needs-decision|D93F0B|We have to choose before it can be built; the body has a Decision: line"
+  "needs-info|D4C5F9|Waiting on a named outside person; the body has a Waiting on: line"
+  "ready-for-agent|0E8A16|Fully specified; an agent can build it with no human"
+  "ready-for-human|1D76DB|Needs a person's hands: access, credentials, a UI or production"
   "waiting|C5DEF5|Waiting on a date or an outside party; the issue says which"
 )
 

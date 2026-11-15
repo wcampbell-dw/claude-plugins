@@ -57,7 +57,12 @@ Show the breakdown as a numbered list. For each issue:
 - **Blocked by**: other draft issues or existing issue numbers, or "none"
 - **Files**: the directories or modules it touches, for overlap checks only
 - **Verified by**: the command or check, and any hand check
-- **Who**: agent (`ready-for-agent`) or me (`ready-for-human`)
+- **State**: the label that names its next step:
+  - `ready-for-agent`: an agent builds it, with no human needed
+  - `needs-research`: an agent answers a question first (a spike, probe or data check), with its `Question:`
+  - `needs-decision`: I have to choose before it can be built, with its `Decision:`. Prefer settling it in this grill; use this for a choice that needs research or other people first
+  - `needs-info`: waiting on a named outside person, with its `Waiting on:`
+  - `ready-for-human`: needs my hands (access, credentials, a UI, production), with its `Waiting on:`
 - **Not before**: a date, if time-gated (these also get `waiting`)
 
 If there is no parent issue and the plan has three or more issues, propose an epic to hold them. Then ask me: is the granularity right, are the blockers real, should any be merged or split? Iterate until I approve.
@@ -82,10 +87,13 @@ Create issues in dependency order, blockers first, so each can reference real nu
 
    Files: <directories or modules>
    Not before: <YYYY-MM-DD>
+   Question: <for needs-research: what to find out>
+   Decision: <for needs-decision: what to choose between>
+   Waiting on: <for needs-info, ready-for-human or waiting: who or what, and for what>
    ```
 
-   `Files:` and `Not before:` each sit alone on a line starting at the left margin, because `/subagent-kit:next` reads them there. Leave `Not before:` out when there is no date, and `Files:` out for an epic. Don't put `Closes` in an issue.
-2. Labels: `ready-for-agent` or `ready-for-human` on every issue that is not an epic; add `waiting` when it has a `Not before:` date or waits on an outside party. An epic gets no `ready-` label.
+   These lines each sit alone on a line starting at the left margin, because `/subagent-kit:next` and `/subagent-kit:issue` read them there. Keep only the ones that apply: `Not before:` only with a date, `Files:` never on an epic, and the one next-step line its state calls for (an issue with `waiting` and a state that has its own line gets both). Don't put `Closes` in an issue.
+2. Labels: the issue's state label on every issue that is not an epic; add `waiting` when it has a `Not before:` date or waits on an outside event. An epic gets no state label. Don't use `blocked` (that is a native link) or `wontfix`.
 3. Links, with `bash <this skill's base directory>/scripts/link.sh`:
    - `link.sh sub <parent> <child>` makes `<child>` a sub-issue of `<parent>`, for the epic and for an issue I named as the source.
    - `link.sh blocked-by <issue> <blocker>` sets GitHub's native "blocked by" edge. Set one per blocker, including existing issues. Write blockers as native edges, not as text in the body.
@@ -93,6 +101,6 @@ Create issues in dependency order, blockers first, so each can reference real nu
 
 ## 5. Check
 
-Run `next.sh` again. Every new issue must land where I expect: no blockers in Ready now, blocked ones in Blocked with the right blockers, my own in For a human, dated ones in Waiting, the epic in Epics. Fix any that don't (a missing edge or label), then give me a table: number, title, link, bucket. Finish with the first issue I should run, as a command like `/subagent-kit:issue 42`.
+Run `next.sh` again. Every new issue must land where I expect: no blockers in Ready now, blocked ones in Blocked with the right blockers, `ready-for-human` and `needs-decision` ones in For a human, `needs-research` ones in Research, `needs-info` ones in Needs triage, dated ones in Waiting, the epic in Epics. Fix any that don't (a missing edge or label), then give me a table: number, title, link, bucket. Finish with the first issue I should run, as a command like `/subagent-kit:issue 42`.
 
 Don't start any of the work.
