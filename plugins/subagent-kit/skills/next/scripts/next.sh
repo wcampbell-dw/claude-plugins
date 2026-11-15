@@ -79,7 +79,7 @@ fi
 #   human      labeled ready-for-human or needs-decision
 #   research   labeled needs-research: agent work that ends in findings, not a PR
 #   ready      everything else; "labeled" says whether it carries ready-for-agent
-# next_step is the body's first "Waiting on:", "Decision:" or "Question:" line.
+# next_steps lists every "Waiting on:", "Decision:" and "Question:" line in the body, in body order.
 report=$(jq --arg today "$today" --arg slug "$slug" --argjson wts "$worktrees" '
   .data.repository as $r
   | ($r.pullRequests.nodes) as $prs
@@ -119,7 +119,7 @@ report=$(jq --arg today "$today" --arg slug "$slug" --argjson wts "$worktrees" '
           subs: {total: (.subIssues.nodes | length), open: ([.subIssues.nodes[] | select(.state == "OPEN")] | length)},
           not_before: (($body | capture("(?im)^[ \\t]*not before:[ \\t]*(?<d>[0-9]{4}-[0-9]{2}-[0-9]{2})") | .d) // null),
           files: (($body | capture("(?im)^[ \\t]*files:[ \\t]*(?<f>[^\\r\\n]+)") | .f) // null),
-          next_step: (($body | capture("(?im)^[ \\t]*(?<k>waiting on|decision|question):[ \\t]*(?<v>[^\\r\\n]+)") | ({"waiting on": "Waiting on", "decision": "Decision", "question": "Question"}[.k | ascii_downcase]) + ": " + .v) // null),
+          next_steps: [$body | capture("(?im)^[ \\t]*(?<k>waiting on|decision|question):[ \\t]*(?<v>[^\\r\\n]+)"; "g") | ({"waiting on": "Waiting on", "decision": "Decision", "question": "Question"}[.k | ascii_downcase]) + ": " + .v],
           prs: prs_for($i.number; [.closedByPullRequestsReferences.nodes[].number]),
           work: work_for($i.number; (if (.assignees.nodes | length) > 0 then (.timelineItems.nodes[0].createdAt // null) else null end))
         }
@@ -165,7 +165,7 @@ fi
 
 jq -r '
   def who: if (.assignees | length) > 0 then "  (" + (.assignees | join(", ")) + ")" else "" end;
-  def step: if .next_step then "\n      " + .next_step else "" end;
+  def step: [.next_steps[] | "\n      " + .] | join("");
   def extra: [ (if .files then "files: " + .files else empty end) ] | if length > 0 then "  [" + join("; ") + "]" else "" end;
   def section($title; $items; line):
     "\n== \($title) (\($items | length))",

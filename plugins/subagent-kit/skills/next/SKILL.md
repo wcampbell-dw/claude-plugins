@@ -21,7 +21,7 @@ Run `bash <this skill's base directory>/scripts/next.sh` from anywhere inside th
 | Research (agent, no PR) | Labeled `needs-research`: a question an agent answers by investigating, ending in findings on the issue rather than a PR |
 | Epics | Has sub-issues. A container, shown as progress, never offered as work |
 
-Under an issue in Waiting, Research, For a human or Needs triage, the report shows its body's `Waiting on:`, `Decision:` or `Question:` line, when it has one.
+Under an issue in Waiting, Research, For a human or Needs triage, the report shows every `Waiting on:`, `Decision:` and `Question:` line in its body, one per line, in body order.
 
 If it fails, say why (usually `gh` is not signed in, or the folder has no GitHub remote) and stop. If it warns that more than 100 issues are open, say the report covers only the oldest 100. If it warns that only 100 `issue-` branches were read, say a Ready issue may already have a branch.
 
