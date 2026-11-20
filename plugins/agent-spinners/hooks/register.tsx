@@ -41,11 +41,28 @@ const activity = new Map<string, string>()
 // description before its command, a file by its name alone.
 const ARG_KEYS = ['description', 'file_path', 'notebook_path', 'pattern', 'query', 'url', 'command', 'skill', 'prompt']
 
+// Terminal escape sequences, then any other control character. A row's text
+// can't hold either: the band refuses a tree with a control character in it.
+// The sequences: CSI such as colors; the string ones (OSC such as links and
+// titles, DCS, SOS, PM, APC) with their payload, to BEL or ST or else to the
+// end; and the rest, such as `ESC ( B`, with any intermediate bytes.
+const ESCAPES =
+  /(?:\x1b\[|\x9b)[0-?]*[ -/]*[@-~]|(?:\x1b[\]PX^_]|[\x90\x98\x9d-\x9f])[^\x07\x1b\x9c]*(?:\x07|\x1b\\|\x9c)?|\x1b[ -/]*[0-~]/g
+const CONTROLS = /[\x00-\x1f\x7f-\x9f]/g
+
+// Text as a row can draw it: escapes dropped, other controls as spaces.
+const clean = (text: string) => text.replace(ESCAPES, '').replace(CONTROLS, ' ')
+
 const squash = (text: string, max: number) => {
-  const line = text.replace(/\s+/g, ' ').trim()
+  const line = clean(text).replace(/\s+/g, ' ').trim()
 
   return line.length > max ? `${line.slice(0, max - 1)}…` : line
 }
+
+// The first of `texts` with something left once squashed, so a description
+// that was all escapes falls back to the next.
+const firstOf = (max: number, ...texts: (string | undefined)[]) =>
+  texts.map(text => squash(text ?? '', max)).find(Boolean) ?? ''
 
 const describe = (e: { tool: string }) => {
   const args = e as unknown as Record<string, unknown>
@@ -57,12 +74,10 @@ const describe = (e: { tool: string }) => {
     if (typeof value !== 'string' || !value.trim()) continue
 
     const text = key.endsWith('_path') ? (value.split(/[\\/]/).pop() ?? value) : value
-    const line = `${tool}: ${text.replace(/\s+/g, ' ').trim()}`
-
-    return line.length > ACTIVITY_MAX ? `${line.slice(0, ACTIVITY_MAX - 1)}…` : line
+    return squash(`${tool}: ${text}`, ACTIVITY_MAX)
   }
 
-  return tool
+  return clean(tool)
 }
 
 // What a toast says when an agent moves into a status, by status; a status
@@ -76,13 +91,14 @@ const NOTICES: Record<string, string> = {
 
 const rowOf = (task: TaskRecord, now: number, isChild: boolean): AgentRow => ({
   id: `task:${task.id}`,
-  label: task.label,
+  // Cleaned again here for a task stored before its text was cleaned.
+  label: clean(task.label),
   type: task.kind,
   kind: task.kind,
   status: task.status,
   isQuiet: task.status === 'running' && now - task.changedAt >= QUIET_MS,
   ...(isChild ? { isChild } : {}),
-  ...(task.status === 'running' && task.activity ? { activity: task.activity } : {}),
+  ...(task.status === 'running' && task.activity ? { activity: clean(task.activity) } : {}),
 })
 
 // Ends the tasks whose notification may never come, and drops those that
@@ -109,6 +125,8 @@ async function refresh($: Engine) {
   const agents = await $.agent.list()
 
   for (const agent of agents) {
+    const type = clean(agent.type)
+    const label = firstOf(LABEL_MAX, agent.description, agent.name, agent.type)
     const previous = lastStatus.get(agent.id)
     if (previous !== agent.status) {
       lastStatus.set(agent.id, agent.status)
@@ -118,9 +136,7 @@ async function refresh($: Engine) {
       const notice = NOTICES[agent.status]
       if (previous !== undefined && notice) {
         $.ui.toast(
-          notice
-            .replace('{type}', agent.type)
-            .replace('{label}', agent.description || agent.name || agent.type),
+          notice.replace(/\{(type|label)\}/g, (_, key: string) => (key === 'type' ? type : label)),
           { timeoutMs: agent.status === 'waiting' ? ATTENTION_TOAST_MS : TOAST_MS },
         )
       }
@@ -131,8 +147,8 @@ async function refresh($: Engine) {
 
     const row: AgentRow = {
       id: agent.id,
-      label: agent.description || agent.name || agent.type,
-      type: agent.type,
+      label,
+      type,
       kind: 'agent',
       status: agent.status,
       // An agent that has ended stays bright until it drops off.
@@ -212,7 +228,7 @@ async function track($: Engine, e: Call, output: unknown) {
     started = {
       id: out.backgroundTaskId,
       kind: 'shell',
-      label: squash(e.description || e.command || out.backgroundTaskId, LABEL_MAX),
+      label: firstOf(LABEL_MAX, e.description, e.command, out.backgroundTaskId),
       status: 'running',
       changedAt: now,
       // Killed when its agent finishes, so no notification follows.
@@ -223,7 +239,7 @@ async function track($: Engine, e: Call, output: unknown) {
     started = {
       id: out.taskId,
       kind: 'monitor',
-      label: squash(e.description || out.taskId, LABEL_MAX),
+      label: firstOf(LABEL_MAX, e.description, out.taskId),
       status: 'running',
       changedAt: now,
       endsWithParent: false,

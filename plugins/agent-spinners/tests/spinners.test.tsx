@@ -652,6 +652,46 @@ test('a monitor event shows as activity and a TaskStop shows stopped', async ($,
   await ui.unmount()
 })
 
+test('escape sequences and control characters never reach a row', async ($, on) => {
+  const clock = mock.clock(on)
+  const toasts: string[] = []
+  let agents: AgentInfo[] = [
+    { id: 'a1', description: '\x1b[1mFix\x07 the $& test', type: '\x1b[35mimplementer\x1b(B', status: 'running' },
+    // A description that is all escapes falls back to the name.
+    { id: 'a2', description: '\x1b[1m\x1b[0m', name: 'helper', type: 'scoper', status: 'running' },
+  ]
+  setup(on, () => agents)
+  on('agent.spawn', () => ({ model: 'claude-haiku-5-5', agentId: 'a1' }))
+  on('ui.toast', (_$, e) => {
+    toasts.push(e.text)
+
+    return { value: undefined }
+  })
+  on('tool.call', { tool: 'Monitor' }, () => ({ result: { taskId: 'm1', timeoutMs: 0, persistent: true } }))
+  on('tool.call', { tool: 'Bash' }, () => ({ result: {} }))
+  await spawn($, 'Fix the test')
+
+  await $.tool.call({ tool: 'Monitor', command: 'tail -f log', description: '\x1b]0;title\x07errors\tin log', timeout_ms: 0 })
+  await $.tool.call({ tool: 'Bash', command: 'echo \x1bP1$r\x1b\\\x1b[32mok\x1b(B\x1b[m', agentId: 'a1' })
+  await submit($, notify(['<task-id>m1</task-id>\n<event>\x1b[31mERROR\x1b[0m: \x00timeout</event>']))
+  await clock.advance(500)
+
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
+  const text = (await drawn(ui)).join('')
+  expect(text).toContain('implementer ')
+  expect(text).toContain('Fix the $& test')
+  expect(text).toContain('helper')
+  expect(text).toContain('Bash: echo ok')
+  expect(text).toContain('errors in log')
+  expect(text).toContain('ERROR: timeout')
+  expect(/[\x00-\x1f\x7f-\x9f]/.test(text)).toBe(false)
+  await ui.unmount()
+
+  agents = agents.map(agent => ({ ...agent, status: 'completed' }))
+  await clock.advance(500)
+  expect(toasts).toEqual(['✓ implementer finished: Fix the $& test', '✓ scoper finished: helper'])
+})
+
 test('one prompt text carrying two notifications updates both tasks', async ($, on) => {
   const clock = mock.clock(on)
   setup(on, () => [])
