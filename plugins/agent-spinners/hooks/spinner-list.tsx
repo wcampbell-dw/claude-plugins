@@ -4,8 +4,8 @@ import type { AgentRow } from '../types'
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏']
 const FRAME_MS = 80
-// A child row's lead, its `└` under the first letter of its agent's type.
-const CHILD_LEAD = '  └  '
+// A child row's lead, its `⎿` under the first letter of its agent's type.
+const CHILD_LEAD = '  ⎿  '
 const SEPARATOR = ' › '
 // The type name's glint: how many graphemes it lights, and how many steps it
 // spends off the word between sweeps.
