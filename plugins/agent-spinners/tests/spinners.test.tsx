@@ -545,7 +545,7 @@ test('a background command gets a top-level shell row until its notification', a
   const text = async () => (await drawn(ui)).join('')
   expect(await text()).toContain('shell ')
   expect(await text()).toContain('Run the login tests')
-  expect(await text()).not.toContain('└')
+  expect(await text()).not.toContain('⎿')
   expect((await ui.findAll({ in: 'agent-spinners', type: 'Text' }))[0]?.props.color).toBe('planMode')
 
   // An id that isn't tracked changes nothing.
@@ -615,7 +615,7 @@ test('a monitor an agent started sits under that agent', async ($, on) => {
   const at = (re: RegExp) => texts.findIndex(t => re.test(t))
   expect(at(/Fix the test/)).toBeLessThan(at(/errors in deploy\.log/))
   expect(at(/errors in deploy\.log/)).toBeLessThan(at(/Other agent/))
-  expect(texts).toContain('  └  ')
+  expect(texts).toContain('  ⎿  ')
   expect(texts).toContain('monitor ')
   await ui.unmount()
 })

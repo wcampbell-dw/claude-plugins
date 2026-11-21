@@ -399,7 +399,7 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column">
         {rows.map(row => (
           <Text key={row.id} dimColor={row.isQuiet}>
-            {row.isChild ? '  └ ' : ''}
+            {row.isChild ? '  ⎿ ' : ''}
             {ACTIVE.has(row.status) ? '●' : '○'} {row.label}
             {ENDED[row.status] ?? row.activity ? ` › ${ENDED[row.status] ?? row.activity}` : ''}
           </Text>
