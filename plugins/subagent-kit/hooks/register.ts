@@ -168,6 +168,13 @@ export const judgeShipperCommand = (command: string): string | undefined => {
   return `\`${[program, args[0]].filter(Boolean).join(' ')}\` is not one of them`
 }
 
+// The session title for a prompt that starts /subagent-kit:issue: `issue-42`, or `issue-13-14`
+// for a queue, the name /dispatch gives its sessions. Undefined for any other prompt.
+export const issueTitle = (prompt: string): string | undefined => {
+  const m = /^\/(?:subagent-kit:)?issue\s+(#?\d+(?:[\s,]+#?\d+)*)$/.exec(prompt.trim())
+  return m ? `issue-${m[1].replace(/#/g, '').split(/[\s,]+/).join('-')}` : undefined
+}
+
 // Whether the loop is a shipper's: one seen starting, or one the agent list names.
 const isShipper = async ($: Engine, shippers: Set<string>, agentId: string | undefined) =>
   agentId !== undefined &&
@@ -183,6 +190,14 @@ export const register: Register = on => {
     if (!e.tools.includes('Agent')) return result
     rules ??= $.fs.read(`${$.plugin.root}/DELEGATION.md`) as Promise<string>
     return { sections: [...result.sections, { id: SECTION, text: await rules, scope: 'session' }] }
+  })
+
+  // Names an /issue session after its issues instead of letting the generated title lead with
+  // the plugin's name. A name already given (`claude -n`, /rename) stays.
+  on('classic.UserPromptSubmit', async ($, e, next) => {
+    const result = await next(e)
+    const title = e.session_title ? undefined : issueTitle(e.prompt)
+    return title && !result.sessionTitle ? { ...result, sessionTitle: title } : result
   })
 
   on('agent.spawn', async ($, e, next) => {
