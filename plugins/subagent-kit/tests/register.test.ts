@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import type { On } from 'claude-code'
+import { issueTitle } from '../hooks/register.ts'
 
 const BASE = { id: 'intro', text: 'You are Claude Code.', scope: 'shared' } as const
 
@@ -198,4 +199,48 @@ test('leaves other agents and the main loop alone', async ($, on) => {
 
   expect((await bash($, 'git diff | head', 'impl1')).text).toBe('ran')
   expect((await bash($, 'git diff | head')).text).toBe('ran')
+})
+
+for (const [prompt, title] of [
+  ['/subagent-kit:issue 42', 'issue-42'],
+  ['/issue 42', 'issue-42'],
+  ['  /subagent-kit:issue 13 14 ', 'issue-13-14'],
+  ['/subagent-kit:issue 13,14', 'issue-13-14'],
+  ['/subagent-kit:issue #42', 'issue-42'],
+  ['/subagent-kit:issue 42 please', undefined],
+  ['/subagent-kit:issue', undefined],
+  ['/subagent-kit:issue abc', undefined],
+  ['/subagent-kit:next', undefined],
+  ['fix issue 42', undefined],
+] as const) {
+  test(`titles ${JSON.stringify(prompt)} as ${title}`, async () => {
+    expect(issueTitle(prompt)).toBe(title)
+  })
+}
+
+const submit = (prompt: string, session_title?: string) => ({ prompt, ...(session_title && { session_title }) })
+
+test('titles an /issue session after its issue', async ($, on) => {
+  on('classic.UserPromptSubmit', () => ({}))
+  expect(await $.classic.UserPromptSubmit(submit('/subagent-kit:issue 42'))).toEqual({ sessionTitle: 'issue-42' })
+})
+
+test('keeps a name the session already has', async ($, on) => {
+  on('classic.UserPromptSubmit', () => ({}))
+  expect(await $.classic.UserPromptSubmit(submit('/subagent-kit:issue 42', 'mine'))).toEqual({})
+})
+
+test('leaves other prompts untitled', async ($, on) => {
+  on('classic.UserPromptSubmit', () => ({}))
+  expect(await $.classic.UserPromptSubmit(submit('hello'))).toEqual({})
+})
+
+test("keeps another hook's title", async ($, on) => {
+  on('classic.UserPromptSubmit', () => ({ sessionTitle: 'theirs', additionalContext: ['x'] }))
+  expect(await $.classic.UserPromptSubmit(submit('/subagent-kit:issue 42'))).toEqual({ sessionTitle: 'theirs', additionalContext: ['x'] })
+})
+
+test('keeps what other hooks returned beside the title', async ($, on) => {
+  on('classic.UserPromptSubmit', () => ({ additionalContext: ['x'] }))
+  expect(await $.classic.UserPromptSubmit(submit('/subagent-kit:issue 42'))).toEqual({ additionalContext: ['x'], sessionTitle: 'issue-42' })
 })
