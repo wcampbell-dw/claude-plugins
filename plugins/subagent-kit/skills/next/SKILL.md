@@ -33,7 +33,7 @@ Print the script's output as it is, then add the brief below. Do not retell ever
 
 Keep it short and concrete, in this order:
 
-1. **Recommended next.** One issue, or at most three that can run in parallel, as ready-to-run commands: `/subagent-kit:issue 12`. Pick by:
+1. **Recommended next.** One issue, or at most three that can run in parallel, as ready-to-run commands: `/subagent-kit:issue 12`. When recommending more than one, also give the line that starts them all at once: `/subagent-kit:dispatch 12 15`. Pick by:
    - Unblocking the most work first: count how many Blocked issues list it, directly or through a chain.
    - Anything with a `Not before:` date that has passed (marked in the report).
    - Finishing before starting: an open PR that is failing checks or has had no review outranks new work, so say so.
